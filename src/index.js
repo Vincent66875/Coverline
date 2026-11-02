@@ -1,7 +1,21 @@
 // Forge resolver: storage only. Jira data is read in the page with requestJira (runs as the current user).
-import Resolver from '@forge/resolver';
-import { kvs, WhereConditions } from '@forge/kvs';
+// Namespace imports + pick(): package.json has "type": "module" (for the node tests), and Forge's bundler then
+// hands a CommonJS package's default import back as the whole module object ("…namespaceObject is not a constructor").
+// pick() finds the export whether it sits at the top, on .default, or on .default.default.
+import * as resolverPkg from '@forge/resolver';
+import * as kvsPkg from '@forge/kvs';
 import { makeStore } from './storage.js';
+
+function pick(mod, name, test) {
+  const spots = name === 'default' ? [mod.default?.default, mod.default, mod] : [mod[name], mod.default?.[name], mod.default?.default?.[name]];
+  const found = spots.find(test);
+  if (!found) throw new Error(`Could not load ${name} from a Forge package`);
+  return found;
+}
+
+const Resolver = pick(resolverPkg, 'default', (x) => typeof x === 'function');
+const kvs = pick(kvsPkg, 'kvs', (x) => x && typeof x.get === 'function');
+const WhereConditions = pick(kvsPkg, 'WhereConditions', (x) => x && typeof x.beginsWith === 'function');
 
 const store = makeStore(kvs, WhereConditions);
 const resolver = new Resolver();
