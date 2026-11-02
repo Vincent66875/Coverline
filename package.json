@@ -7,7 +7,10 @@
   "scripts": {
     "test": "node --test test/*.test.js test/analysis/*.test.js",
     "build:ui": "npm --prefix static/team-map run build",
-    "deploy": "npm run build:ui && forge deploy"
+    "deploy": "npm run build:ui && forge deploy",
+    "seed": "node scripts/seed-jira.mjs",
+    "seed:dry": "node scripts/seed-jira.mjs --dry-run",
+    "seed:clean": "node scripts/seed-jira.mjs --clean"
   },
   "dependencies": {
     "@forge/kvs": "latest",

@@ -6,7 +6,7 @@ const DEF = 'jira-software-users';
 const h = (id, displayName, extra = {}) => ({ accountId: id, displayName, active: true, accountType: 'atlassian', groups: [DEF], ...extra });
 const asg = (at, from, to) => ({ at, items: [{ field: 'assignee', from, to }] });
 
-export default buildFixture({
+export const spec = {
   name: 'large',
   asOf: '2026-10-29T12:00:00.000+0000',
   projects: { DES: 'Design', WEB: 'Frontend', API: 'Backend', MOB: 'Mobile' },
@@ -113,4 +113,6 @@ export default buildFixture({
     { id: 2020, type: 'sequence', from: 'MOB-8', to: 'MOB-9' }, // Wallet UI "follows" Wallet prototype: team's own link wording
     { id: 2021, type: 'buildsOn', from: 'MOB-2', to: 'MOB-10' }, // Wallet onboarding builds on Payments SDK spike (own work)
   ],
-});
+};
+
+export default buildFixture(spec);

@@ -3,3 +3,5 @@ static/team-map/node_modules/
 static/team-map/build/
 .check-forge/
 screenshots/
+scripts/seed-people.json
+scripts/.seed-state.json

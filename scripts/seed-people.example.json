@@ -1,0 +1,15 @@
+{
+  "people": {
+    "mia": "you+jtm-mia@gmail.com",
+    "ivy": "you+jtm-ivy@gmail.com",
+    "ken": "you+jtm-ken@gmail.com",
+    "lea": "you+jtm-lea@gmail.com",
+    "sam": "you+jtm-sam@gmail.com",
+    "vic": "",
+    "wen": "you+jtm-wen@gmail.com",
+    "xan": "you+jtm-xan@gmail.com",
+    "paula": ""
+  },
+  "projects": { "DES": "DES", "WEB": "WEB", "API": "API", "MOB": "MOB" },
+  "flag": ["MOB-2"]
+}
