@@ -1,0 +1,31 @@
+# Team map for Jira Cloud.
+# `forge register` replaces app.id with your own app's id.
+app:
+  id: ari:cloud:ecosystem::app/11e2c0da-ca16-4617-ba5b-583b80defa61
+  runtime:
+    name: nodejs22.x
+
+modules:
+  jira:projectPage:
+    - key: team-map-project-page
+      resource: main
+      resolver:
+        function: resolver
+      title: Team map
+  function:
+    - key: resolver
+      handler: index.handler
+
+resources:
+  - key: main
+    path: static/team-map/build
+
+permissions:
+  scopes:
+    - read:jira-work # search issues, changelogs, link types
+    - write:jira-work # create / delete issue links drawn in My work
+    - read:jira-user # names on assignees, reporters, history authors
+    - storage:app # links with no Jira link type, dismissed suggestions
+  content:
+    styles:
+      - unsafe-inline # React sets a few inline styles (map size, popup position)

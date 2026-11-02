@@ -1,0 +1,16 @@
+{
+  "name": "jira-team-map-forge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Team map for Jira Cloud (Forge): people dependency map + My work board",
+  "scripts": {
+    "test": "node --test test/*.test.js test/analysis/*.test.js",
+    "build:ui": "npm --prefix static/team-map run build",
+    "deploy": "npm run build:ui && forge deploy"
+  },
+  "dependencies": {
+    "@forge/kvs": "latest",
+    "@forge/resolver": "latest"
+  }
+}

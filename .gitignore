@@ -1,0 +1,5 @@
+node_modules/
+static/team-map/node_modules/
+static/team-map/build/
+.check-forge/
+screenshots/

@@ -1,0 +1,167 @@
+Build a local React MVP of a Jira app. Mock data only, no Forge yet.
+Read-only. Build in the stages listed at the end, one stage per message,
+show me each stage, don't do it all in one pass.
+
+== THE PROBLEM ==
+
+Every Jira ticket has one owner, so teams can't see which work depends on a
+single person until it stalls: someone is out, or two people built
+connected pieces without ever working together. Jira shows who owns the
+work; Git shows who wrote the code; neither shows who else could carry it.
+
+== WHAT THE APP IS ==
+
+Two linked parts, built only from data already in Jira (zero manual input):
+
+1. PEOPLE DEPENDENCY MAP: people are nodes, tickets are edge labels, never
+   nodes. Arrow = "waits on", from waiter to blocker. Coverage risk score
+   and ranking with reasons and ticket keys. Absence toggle: mark a person
+   out, see which work stalls and who is left waiting, live.
+2. "WHO HAS WORKED ON THIS?" SEARCH: pick a ticket or area (epic,
+   component, label) and get a short list of people who have worked on it
+   or related work before, with tickets as evidence.
+
+Link: each dependency arrow gets a cover badge. Green = someone other than
+the blocker's owner has worked on the blocking task (now or before).
+Amber = only one person has. Clicking a badge opens that task's
+"who has worked on this" list.
+
+Hard rule: no ticket-to-ticket graph without first selecting a person.
+Tickets are evidence, not the finding.
+
+== DATA (mock, shaped like Jira Cloud REST) ==
+
+users[]:  { accountId, displayName, active, accountType, team?, groups }
+issues[]: { key, fields: { summary, status {name, statusCategory},
+            issuetype, assignee, reporter, project, components, labels,
+            duedate, created, updated, resolutiondate, story points
+            (customfield_10016), parent, issuelinks[] },
+            changelog { histories[] } }   (as with expand=changelog)
+
+Two fixtures:
+- small test fixture (~7 people) with exact expected values in tests
+- large demo fixture: 4 teams of 3-4 people + a reporter-only PM, ~40
+  issues incl. Done work over the past ~12 months (two items older than
+  12 months), components and labels (one label spanning 3 projects)
+Edge cases in fixtures: unassigned blocker, deactivated assignee, bot
+reporter, dependency cycle through a sub-task, duplicate link after
+sub-task rollup, "depends on" link type (reversed wording), resolved link,
+"Relates" link (ignored), team from team field / Jira group / project key,
+changelog: handoff, sub-task reassignment, deactivated past assignee,
+from-unassigned change, status-only change, bounced assignment (A->B->A).
+Every link is written on both issues with the same link id.
+
+== ADAPTER (pure, no React) ==
+
+owner = assignee; helpers = sub-task assignees; reporter is NOT coverage
+dependency = link type matching /block|depend/i; the issue that "is
+  blocked by" X waits on X; roll sub-task links up to the parent;
+  de-duplicate; keep both ticket keys per dependency
+person edges: collapse to one edge per (waiter -> blocker) with a list of
+  ticket pairs and weight; each pair readable as a sentence:
+  "Ken waits on Mia: Mia's 'Design tokens' [DES-2] (In Progress, due in 3
+  days) blocks Ken's 'Token migration' [WEB-2]."
+team = team field -> non-default Jira group -> most common project key
+lead = assignee, fallback human reporter
+stale = not Done, no update in 14 days (flag only, never scored)
+scope = open work; Done is history only
+excluded = bots, apps, deactivated users
+knowledge records: { person, issueKey, how, when, current, via }
+  how = assignee | sub-task | past assignee (from changelog)
+  sub-task work credited to the parent; reporter, bots, deactivated,
+  epics, from-unassigned changes never count
+data quality report: issue counts, % open work assigned, dependency
+  links, blockers with no assignee, excluded accounts, team sources,
+  % open work with a second person who has worked on it, changelog
+  parse counts
+
+== SCORING: COVERAGE RISK PER PERSON ("if this person is also out") ==
+
+  open task others depend on, no one else left on it:
+      cold (no one else has ever worked on it)   4 each
+      warm (someone else has, now or before)     2 each
+  + that task is Blocked or overdue                +2
+  each distinct person left waiting                4 each
+    (follow chains all the way, guard against cycles)
+  sole team link: team pair connected only through them   2 each
+  a task's lead would change                        2 each
+No points for a solo task nothing depends on (list it, don't score it).
+Staleness is a separate flag. Always show the score WITH its reasons and
+ticket keys; the formula must be visible in the UI.
+Headline per person: downstream unblock count as a sentence:
+"2 tasks start once Mia's blocking work is done."
+
+== "WHO HAS WORKED ON THIS?" RULES ==
+
+Input: issue key, or area (epic, component, label).
+Related work, closest first: 1) same ticket and its sub-tasks,
+2) linked tickets (any dependency direction, incl. resolved links),
+3) same epic, component or label. Within a tier, most recent first.
+One line per person with all evidence (how, ticket key, how long ago,
+now/before). Max 5 people. Drop work older than 12 months. Mark people
+currently marked out. Candidates only: never say who should be asked or
+who the backup is.
+
+== UI ==
+
+Jira-like chrome: a project app page beside Board / Backlog / Reports.
+1. Provenance line: "Built from N Jira issues with no manual input ·
+   X% assigned · N dependency links" - every number opens its tickets.
+2. Data quality panel (collapsible).
+3. Hero: hand-rolled SVG people graph, no chart library. A column per
+   team; node size = coverage risk; arrow labels = blocker summary (weight
+   when > 1); red edge = blocker overdue or Blocked; cover badge on each
+   arrow. Labels wrap to 2 lines and are placed so they don't sit on
+   people nodes. Keyboard accessible; a screen-reader list of every edge
+   as a sentence. Order team columns to keep cross-team arrows short.
+4. Select a person: fade the rest, show knowledge lines only for that
+   person's work.
+5. Absence toggle: their node greys, broken arrows turn red, people left
+   waiting get a red ring, people with context on stalled work get a
+   green ring, ranking re-scores live with +/- deltas.
+6. Ranking: everyone with score > 0, score + reason fragments.
+7. Person detail: unblock sentence, tasks with no one else left (warm /
+   cold), people left waiting with full chain (A -> B -> C), sole team
+   links, lead changes, stale items, "who has worked near this".
+8. Search box (ticket key or area) + results list, opened also from
+   badges and from person detail.
+9. Zoom levels for edge labels: ticket / theme (epic) / team; the team
+   sentence derived from person edges:
+   "Frontend waits on Design, through Mia only".
+Every number links to the ticket keys behind it.
+
+== WORDING RULES ==
+
+Say "coverage risk". Say "has worked on", never "knows" or "expert".
+No workload, capacity or hours language. No "bus factor", "person risk",
+"most important person", or anything ranking people by value.
+
+== OUT OF SCOPE ==
+
+GitHub/Git data, Slack/Teams, self-declared collaboration, Asana,
+alerts, any write to Jira, Forge, capacity, backup recommendations.
+
+== STACK ==
+
+React + Vite. Plain CSS scoped under one root class. No chart or
+component library. All analysis in pure modules with zero React imports,
+runnable and testable in node. App opens on the large fixture; ?data=small
+loads the small one.
+
+== BUILD ORDER - ONE STAGE PER MESSAGE ==
+
+1. Both fixtures + adapter (people, dependencies, edges, knowledge
+   records, data quality). Verify in node with assertions.
+2. Scoring + analysis: coverage risk with warm/cold, chains, sole team
+   links, lead changes, unblock sentence, absence impact. Verify in node:
+   each person's score with component reasons, full chain paths.
+3. whoHasWorkedOn() + team/zoom sentences. Verify in node with expected
+   lists for 4-5 tickets and 1-2 areas.
+4. Graph component (layout, badges, labels, keyboard, SR list).
+5. Ranking, person detail, search box + results.
+6. Absence toggle, select-person knowledge lines, zoom levels.
+
+At each stage, tell me plainly what you verified by running and what you
+could not verify. If you can't install packages or render React in your
+environment, say so and test another way (e.g. bundle and run in a
+headless browser) rather than claiming the UI works.
