@@ -26,6 +26,8 @@ const TEAMS = {
   Mobile: ['wen', 'xan', 'yui'],
   Product: ['paula'],
 };
+// your own names for demo roles (add more here, or use { "email": …, "plays": "lea" } in seed-people.json)
+const CAST = { sara: 'lea', alex: 'sam', vincent: 'vic' };
 const FOLD = { noah: ['mia', 'ivy'], omar: ['lea', 'ken'], tara: ['sam', 'vic'], uri: ['vic', 'sam'], dan: ['sam', 'vic'], yui: ['xan', 'wen'] };
 const teamOf = (p) => Object.keys(TEAMS).find((t) => TEAMS[t].includes(p));
 const short = (demoId) => demoId?.replace(/^u-/, '') ?? null;
@@ -66,22 +68,42 @@ export async function seed({ request, people = {}, projects = {}, state = { keys
 
   // ---------- people
   log('People');
-  const accounts = {};
-  for (const [p, v] of Object.entries(people)) {
-    if (!v) continue;
-    if (!String(v).includes('@')) { accounts[p] = v; continue; }
-    const found = (await request(`/rest/api/3/user/search?query=${encodeURIComponent(v)}`)) ?? [];
-    const users = found.filter((u) => u.accountType === 'atlassian' && u.active !== false);
-    const exact = users.filter((u) => u.emailAddress?.toLowerCase() === v.toLowerCase());
-    const hit = exact.length === 1 ? exact[0] : users.length === 1 ? users[0] : null;
-    if (!hit) throw new Error(`No single active Jira user found for ${p} (${v}). Has the invite been accepted? You can put the accountId instead of the email.`);
-    accounts[p] = hit.accountId;
-    log(`  ${p.padEnd(6)} → ${hit.displayName}`);
+  const accounts = {}; // demo role -> accountId
+  const nameFor = {}; // demo role -> the name used in seed-people.json
+  const demoNames = spec.users.map((u) => short(u.accountId)).filter((p) => p !== 'bot');
+  const entries = Object.entries(people)
+    .filter(([, v]) => v)
+    .map(([name, v]) => {
+      const key = name.toLowerCase();
+      const role = typeof v === 'object' ? v.plays : demoNames.includes(key) ? key : CAST[key];
+      return { name, role, id: typeof v === 'object' ? v.email ?? v.accountId : v };
+    });
+  const bad = entries.filter((e) => !demoNames.includes(e.role));
+  if (bad.length)
+    throw new Error(`seed-people.json: no demo role for ${bad.map((e) => `"${e.name}"`).join(', ')}. Use a demo name (${demoNames.join(', ')}) or say who they play: "${bad[0].name}": { "email": "…", "plays": "lea" }`);
+  const taken = entries.map((e) => e.role).filter((r, i, all) => all.indexOf(r) !== i);
+  if (taken.length) throw new Error(`seed-people.json: two people play ${taken[0]}. Give one of them another role with "plays".`);
+  for (const { name, role, id } of entries) {
+    let accountId = id;
+    let shown = id;
+    if (String(id).includes('@')) {
+      const found = (await request(`/rest/api/3/user/search?query=${encodeURIComponent(id)}`)) ?? [];
+      const users = found.filter((u) => u.accountType === 'atlassian' && u.active !== false);
+      const exact = users.filter((u) => u.emailAddress?.toLowerCase() === id.toLowerCase());
+      const hit = exact.length === 1 ? exact[0] : users.length === 1 ? users[0] : null;
+      if (!hit) throw new Error(`No single active Jira user found for ${name} (${id}). Has the invite been accepted? You can put the accountId instead of the email.`);
+      accountId = hit.accountId;
+      shown = hit.displayName;
+    }
+    accounts[role] = accountId;
+    nameFor[role] = name;
+    log(`  ${name.padEnd(8)}${role !== name.toLowerCase() ? ` (plays ${role})` : ''} → ${shown}`);
   }
-  if (!Object.keys(accounts).length) throw new Error('scripts/seed-people.json maps no one. Copy seed-people.example.json and fill in your accounts.');
+  if (!entries.length) throw new Error('scripts/seed-people.json maps no one. Copy seed-people.example.json and fill in your accounts.');
   const folded = foldPeople(accounts, me.accountId);
+  const label = (role) => (role === 'you' ? 'you' : nameFor[role] ?? role);
   const folds = Object.entries(folded).filter(([p, f]) => f.as !== p && p !== 'bot');
-  if (folds.length) log(`  folded: ${folds.map(([p, f]) => `${p}→${f.as}`).join(', ')}`);
+  if (folds.length) log(`  their work also covers: ${folds.map(([p, f]) => `${p}→${label(f.as)}`).join(', ')}`);
   const acct = (demoId) => (demoId ? folded[short(demoId)].accountId : null);
 
   // ---------- projects
@@ -329,6 +351,29 @@ export async function clean({ request, log = console.log, keys = [] }) {
 }
 
 // ---------------------------------------------------------------- CLI
+/** "you.atlassian.net/jira/your-work" or "https://you.atlassian.net/" -> "https://you.atlassian.net" */
+export function siteOrigin(raw) {
+  const v = raw.trim().replace(/^["']|["']$/g, '');
+  const url = new URL(/^https?:\/\//i.test(v) ? v : `https://${v}`);
+  return `https://${url.host}`;
+}
+
+/** Turn Node's bare "fetch failed" into the reason and what to check. */
+export function networkHint(e, site) {
+  const code = e.cause?.code ?? e.cause?.errno ?? '';
+  const why = e.cause?.message ?? e.message;
+  const host = new URL(site).host;
+  const hint =
+    code === 'ENOTFOUND' || code === 'EAI_AGAIN'
+      ? `${host} does not exist. Check JIRA_SITE: copy the address from your browser while Jira is open (it ends in .atlassian.net).`
+      : /CERT|SSL|TLS|SELF_SIGNED|UNABLE_TO/i.test(`${code} ${why}`)
+        ? 'A VPN, proxy or antivirus is intercepting HTTPS. Turn it off and retry, or run with NODE_EXTRA_CA_CERTS=/path/to/its-certificate.pem.'
+        : code === 'ECONNREFUSED' || code === 'ECONNRESET' || code === 'ETIMEDOUT' || code === 'UND_ERR_CONNECT_TIMEOUT'
+          ? 'The connection was blocked or timed out. Check your internet, VPN or proxy.'
+          : 'Check JIRA_SITE and your internet connection.';
+  return `could not reach ${host} (${code || why}). ${hint}`;
+}
+
 async function main() {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const args = new Set(process.argv.slice(2));
@@ -337,9 +382,16 @@ async function main() {
     console.error('Set JIRA_SITE (https://you.atlassian.net), JIRA_EMAIL and JIRA_TOKEN (https://id.atlassian.com/manage-profile/security/api-tokens).');
     process.exit(1);
   }
-  const site = JIRA_SITE.replace(/\/+$/, '');
-  const auth = `Basic ${Buffer.from(`${JIRA_EMAIL}:${JIRA_TOKEN}`).toString('base64')}`;
-  const request = makeRequest((p, init) => fetch(site + p, { ...init, headers: { ...init.headers, Authorization: auth } }));
+  const site = siteOrigin(JIRA_SITE);
+  console.log(`Site: ${site}  as ${JIRA_EMAIL.trim()}`);
+  const auth = `Basic ${Buffer.from(`${JIRA_EMAIL.trim()}:${JIRA_TOKEN.trim()}`).toString('base64')}`;
+  const request = makeRequest(async (p, init) => {
+    try {
+      return await fetch(site + p, { ...init, headers: { ...init.headers, Authorization: auth } });
+    } catch (e) {
+      throw new Error(networkHint(e, site));
+    }
+  });
   const statePath = path.join(here, '.seed-state.json');
 
   if (args.has('--clean')) {

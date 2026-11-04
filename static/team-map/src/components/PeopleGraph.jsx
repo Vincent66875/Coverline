@@ -10,7 +10,7 @@ const KEY_DIR = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDo
  * Hand-rolled SVG people graph. People are nodes; tickets are edge labels.
  * Arrow = "waits on", from waiter to blocker.
  */
-export default function PeopleGraph({ model, data, selectedId = null, absent = new Set(), onSelect, onBadge, onBackground }) {
+export default function PeopleGraph({ model, data, selectedId = null, absent = new Set(), onSelect, onBadge, onBackground, head = null }) {
   const { layout, risk, baseline, labels, badges, edgeById, sentences, rings, knowledge } = data;
   const nodeById = useMemo(() => new Map(layout.nodes.map((n) => [n.id, n])), [layout]);
   const [activeId, setActiveId] = useState(() => layout.nodes[0]?.id ?? null);
@@ -68,6 +68,7 @@ export default function PeopleGraph({ model, data, selectedId = null, absent = n
 
   return (
     <div className="jtm-graph">
+      {head && <div className="jtm-frame-head">{head}</div>}
       <svg
         viewBox={`0 0 ${layout.width} ${layout.height}`}
         style={{ width: '100%', height: 'auto', maxWidth: layout.width, minWidth: Math.round(layout.width * MIN_SCALE) }}

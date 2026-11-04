@@ -55,7 +55,8 @@ export function TicketList({ model, title, keys, onClose, bare }) {
 }
 
 // ------------------------------------------------------------------ search
-export function SearchBox({ model, onSearch, defaultValue = '' }) {
+/** compact: one-line box for the top bar (label hidden, Enter or the button searches). */
+export function SearchBox({ model, onSearch, defaultValue = '', compact = false, inputRef = null, id = 'jtm-search-input' }) {
   const [value, setValue] = useState(defaultValue);
   const a = areas(model);
   const options = [
@@ -66,28 +67,30 @@ export function SearchBox({ model, onSearch, defaultValue = '' }) {
   ];
   return (
     <form
-      className="jtm-search"
+      className={`jtm-search${compact ? ' jtm-search--compact' : ''}`}
       role="search"
       onSubmit={(ev) => {
         ev.preventDefault();
-        onSearch(value);
+        if (value.trim()) onSearch(value);
       }}
     >
-      <label htmlFor="jtm-search-input">Who has worked on this?</label>
+      <label htmlFor={id} className={compact ? 'jtm-sr-only' : undefined}>Who has worked on this?</label>
       <input
-        id="jtm-search-input"
-        list="jtm-search-options"
-        placeholder="Ticket key, epic:, component: or label:"
+        id={id}
+        ref={inputRef}
+        list={`${id}-options`}
+        placeholder={compact ? 'Who has worked on…?' : 'Ticket key, epic:, component: or label:'}
+        title="Ticket key (DES-2), epic:KEY, component:name or label:name"
         value={value}
         onChange={(ev) => setValue(ev.target.value)}
         data-testid="search-input"
       />
-      <datalist id="jtm-search-options">
+      <datalist id={`${id}-options`}>
         {options.map((o) => (
           <option key={o.v} value={o.v}>{o.l}</option>
         ))}
       </datalist>
-      <button type="submit" className="jtm-btn">Search</button>
+      <button type="submit" className={`jtm-btn${compact ? ' jtm-btn--small' : ''}`}>{compact ? 'Find' : 'Search'}</button>
     </form>
   );
 }
@@ -424,7 +427,7 @@ export function ZoomControl({ zoom, onZoom }) {
   const names = { ticket: 'Ticket', theme: 'Theme (epic)', team: 'Team' };
   return (
     <div className="jtm-zoom" role="radiogroup" aria-label="Arrow labels">
-      <span className="jtm-zoom-label">Arrow labels</span>
+      <span className="jtm-zoom-label">Labels</span>
       {ZOOMS.map((z) => (
         <button key={z} type="button" role="radio" aria-checked={zoom === z} className={`jtm-seg${zoom === z ? ' jtm-seg--on' : ''}`} onClick={() => onZoom(z)} data-zoom={z}>
           {names[z]}

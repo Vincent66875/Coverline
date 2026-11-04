@@ -197,7 +197,13 @@
 .jtm .jtm-graph > svg { display: block; }
 
 /* Views: Team map | My work */
-.jtm .jtm-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--jtm-border); margin: 0 0 16px; }
+.jtm .jtm-topbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; border-bottom: 1px solid var(--jtm-border); margin: 0 0 12px; }
+.jtm .jtm-tabs { display: flex; gap: 4px; align-self: flex-end; }
+.jtm .jtm-topbar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0; }
+.jtm .jtm-more { position: relative; }
+.jtm .jtm-more-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; list-style: none; margin: 0; padding: 4px 0; min-width: 180px; background: var(--jtm-bg); border: 1px solid var(--jtm-border); border-radius: 6px; box-shadow: 0 4px 12px rgba(9, 30, 66, 0.15); }
+.jtm .jtm-more-menu button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 6px 12px; color: var(--jtm-text); cursor: pointer; font: inherit; }
+.jtm .jtm-more-menu button:hover, .jtm .jtm-more-menu button:focus-visible { background: var(--jtm-blue-bg); outline: none; }
 .jtm .jtm-tab { border: 0; background: none; padding: 8px 12px; color: var(--jtm-subtle); font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .jtm .jtm-tab:hover { color: var(--jtm-blue); }
 .jtm .jtm-tab--on { color: var(--jtm-blue); border-bottom-color: var(--jtm-blue); }
@@ -333,3 +339,54 @@
 .jtm .jtm-single-head { display: flex; align-items: center; gap: 10px; }
 .jtm .jtm-single ul { margin: 4px 0 0; padding-left: 16px; font-size: 13px; }
 .jtm .jtm-single ul li { margin: 4px 0; }
+
+/* ---------------- compact layout: one bar, keys inside the frames ---------------- */
+.jtm .jtm-board { padding: 8px 16px 16px; }
+.jtm .jtm-topbar { gap: 4px 12px; margin: 0 0 10px; }
+.jtm .jtm-topbar-actions { gap: 6px; padding: 6px 0; flex: 1 1 auto; justify-content: flex-end; }
+.jtm .jtm-search--compact { flex: 0 1 300px; min-width: 180px; gap: 4px; }
+.jtm .jtm-search--compact input { width: auto; flex: 1 1 auto; min-width: 0; padding: 3px 8px; font-size: 13px; }
+.jtm .jtm-btn--attn { border-color: #e2b203; background: var(--jtm-amber-bg); }
+.jtm .jtm-btn--on { background: var(--jtm-blue-bg); border-color: var(--jtm-blue); color: var(--jtm-blue); }
+.jtm .jtm-setup-chip { display: inline-flex; align-items: center; }
+.jtm .jtm-chip-x { border: 0; background: none; color: var(--jtm-muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 4px; margin-left: 1px; border-radius: 3px; }
+.jtm .jtm-chip-x:hover { color: var(--jtm-text); background: var(--jtm-sunken); }
+.jtm .jtm-chip-x:focus-visible { outline: 2px solid var(--jtm-blue); outline-offset: 1px; }
+
+.jtm .jtm-graph { padding: 0 6px 6px; }
+.jtm .jtm-frame-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; padding: 8px 6px 0; font-size: 12px; color: var(--jtm-subtle); }
+.jtm .jtm-board-scroll > .jtm-frame-head { position: sticky; left: 0; padding: 8px 12px 0; }
+.jtm .jtm-frame-head .jtm-zoom-label { font-size: 12px; margin-right: 6px; }
+.jtm .jtm-frame-head .jtm-seg { padding: 2px 8px; font-size: 12px; }
+.jtm .jtm-mini-key { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+.jtm .jtm-mini-key > span { display: inline-flex; align-items: center; gap: 5px; }
+.jtm .jtm-mini-key .jtm-link { font-size: 12px; margin: 0; }
+.jtm .jtm-mk-arrow { display: inline-block; width: 22px; height: 2px; background: #8590a2; position: relative; }
+.jtm .jtm-mk-arrow::after { content: ''; position: absolute; right: -1px; top: -3px; border-left: 6px solid #8590a2; border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
+.jtm .jtm-mk-arrow--red { background: var(--jtm-red); }
+.jtm .jtm-mk-arrow--red::after { border-left-color: var(--jtm-red); }
+.jtm .jtm-mk-badge { display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--jtm-amber); background: var(--jtm-amber-bg); color: var(--jtm-amber); font: 700 9px/1 system-ui, sans-serif; font-style: normal; }
+
+/* My work: one-line person header */
+.jtm .jtm-board-header { align-items: center; margin-bottom: 8px; gap: 8px 16px; }
+.jtm .jtm-person-head { gap: 10px; flex-wrap: wrap; min-width: 0; }
+.jtm .jtm-person-head .jtm-avatar { width: 32px; height: 32px; font-size: 12px; }
+.jtm .jtm-person-head h2 { margin: 0; font-size: 18px; line-height: 1.2; }
+.jtm .jtm-board-header .jtm-person-head p { margin: 0; font-size: 13px; }
+.jtm .jtm-board-actions { align-items: center; gap: 6px; }
+.jtm .jtm-board-actions .jtm-inline-field select, .jtm .jtm-board-actions .jtm-inline-field input { padding: 3px 8px; font-size: 13px; }
+.jtm .jtm-board-actions .jtm-inline-field input { width: 160px; }
+.jtm .jtm-status-line { min-height: 0; margin: 0 0 6px; }
+.jtm .jtm-status-line:empty { margin: 0; }
+
+/* map without an outer frame */
+.jtm .jtm-graph { border: 0; border-radius: 0; padding: 0; }
+.jtm .jtm-graph .jtm-frame-head { padding: 0 0 4px; }
+
+/* My work controls in the shared top bar (same spot and look as the Team search) */
+.jtm .jtm-topbar-actions > .jtm-board-actions { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
+.jtm .jtm-topbar-actions .jtm-inline-field select { padding: 3px 8px; font-size: 13px; }
+/* My work board without an outer frame, like the map */
+.jtm .jtm-board-scroll { border: 0; border-radius: 0; }
+.jtm .jtm-board-scroll > .jtm-frame-head { padding: 0 0 4px; }
+.jtm .jtm-board-scroll .jtm-board-inner { padding: 12px 0; }

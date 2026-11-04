@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Drawer from './Drawer.jsx';
 import { boardColumns } from '../analysis/board.js';
 import { canAdd, linksOf } from '../analysis/relations.js';
@@ -155,33 +156,15 @@ function CardPanel({ model, cardKey, boardKeys, onAdd, onChange, onRemove, onUnp
   );
 }
 
-function GhostPanel({ model, ghost, onAdd, onDismiss }) {
-  const [type, setType] = useState(DEFAULT_RELATION);
-  const check = canAdd(model, ghost.fromKey, ghost.toKey, type);
-  return (
-    <div data-testid="ghost-panel">
-      <p>
-        Suggested because: <strong>{ghost.reason}</strong>.
-      </p>
-      <p className="jtm-popup-sentence"><code>{ghost.fromKey}</code> <strong>{RELATION_TYPES[type].label}</strong> <code>{ghost.toKey}</code> ({ghost.owner})</p>
-      <TypeChoice name="jtm-ghost-type" value={type} onChange={setType} />
-      {!check.ok && <p className="jtm-warn">{check.reason}</p>}
-      <p>
-        <button type="button" className="jtm-btn jtm-btn--small jtm-btn--primary" disabled={!check.ok} onClick={() => onAdd({ fromKey: ghost.fromKey, toKey: ghost.toKey, type })}>Confirm link</button>{' '}
-        <button type="button" className="jtm-btn jtm-btn--small" onClick={() => onDismiss(`${ghost.fromKey}<${ghost.toKey}`)}>Dismiss suggestion</button>
-      </p>
-    </div>
-  );
-}
-
 /**
  * My work: one person's tasks as Kanban-style cards in time columns, left (now) to right (past).
  * Drag a line from one card to another, then pick the relation. Lines feed the team map's context signals.
  */
-export default function MyWork({ model, personId, onPerson, dismissed, onDismiss, onAddLink, onChangeLink, onRemoveLink, onShowOnMap, status, compact, jiraEditable = false }) {
+/** toolbarSlot: element in the app's top bar; when given, the board's controls render there (same spot as the Team search). */
+export default function MyWork({ model, personId, onPerson, onAddLink, onChangeLink, onRemoveLink, onShowOnMap, status, compact, jiraEditable = false, toolbarSlot = null }) {
   const me = model.personById.get(personId);
   const [pinned, setPinned] = useState([]);
-  const [view, setView] = useState(null); // { kind: 'card' | 'link' | 'ghost', key | link | ghost }
+  const [view, setView] = useState(null); // { kind: 'card' | 'link', key | link }
   const [pending, setPending] = useState(null); // dropped line waiting for its relation type
   const [drag, setDrag] = useState(null); // { fromKey, x, y } while drawing a line
   const [geo, setGeo] = useState({ boxes: new Map(), w: 0, h: 0 });
@@ -195,8 +178,8 @@ export default function MyWork({ model, personId, onPerson, dismissed, onDismiss
     setPending(null);
   }, [personId]);
 
-  const board = useMemo(() => boardColumns(model, personId, { pinned, dismissed }), [model, personId, pinned, dismissed]);
-  const boardKeys = board.columns.flatMap((c) => c.cards.map((x) => x.key)).filter((k) => !board.columns.some((c) => c.cards.some((x) => x.key === k && x.kind === 'ghost')));
+  const board = useMemo(() => boardColumns(model, personId, { pinned, suggestions: false }), [model, personId, pinned]);
+  const boardKeys = board.columns.flatMap((c) => c.cards.map((x) => x.key));
 
   // measure card boxes (relative to the scrolling board) for drawing lines
   const measure = useCallback(() => {
@@ -283,72 +266,73 @@ export default function MyWork({ model, personId, onPerson, dismissed, onDismiss
   };
   const boxOf = (k) => geo.boxes.get(k);
   const colOf = new Map(board.columns.flatMap((c, i) => c.cards.map((x) => [x.key, i])));
-  const ghostAsLines = board.ghostLines.map((g) => ({ ...g, id: g.id }));
-  const { routes, lanes } = routeLines([...board.lines, ...ghostAsLines], geo.boxes, colOf, (l) => (l.type ? RELATION_TYPES[l.type].label.length * 6.2 + 14 : 22));
+  const { routes, lanes } = routeLines(board.lines, geo.boxes, colOf, (l) => RELATION_TYPES[l.type].label.length * 6.2 + 14);
   const ownOpen = me.openKeys.length;
   const ownDone = board.columns.flatMap((c) => c.cards).filter((c) => c.kind === 'own' && c.issue.done).length;
   const allKeys = model.issues.filter((i) => !i.isEpic && !i.isSubtask && !boardKeys.includes(i.key));
   const title =
     view?.kind === 'card' ? `${view.key} ${model.issueByKey.get(view.key).summary}`
       : view?.kind === 'link' ? 'Link'
-        : view?.kind === 'ghost' ? 'Suggested link'
-          : '';
+        : '';
+
+  const actions = (
+    <div className="jtm-board-actions" role="toolbar" aria-label="My work">
+      <form
+        className="jtm-search jtm-search--compact"
+        onSubmit={(ev) => {
+          ev.preventDefault();
+          const key = addValue.trim().toUpperCase().split(/\s/)[0];
+          if (model.issueByKey.get(key) && !model.issueByKey.get(key).isEpic) {
+            setPinned((prev) => [...new Set([...prev, model.issueByKey.get(key).workKey])]);
+            setAddValue('');
+          }
+        }}
+      >
+        <label htmlFor="jtm-add-card" className="jtm-sr-only">Add a card</label>
+        <input id="jtm-add-card" list="jtm-add-card-options" value={addValue} onChange={(ev) => setAddValue(ev.target.value)} placeholder="Add a card: ticket key…" title="Put any ticket on this board, e.g. to link it" data-testid="add-card" />
+        <datalist id="jtm-add-card-options">
+          {allKeys.map((i) => (
+            <option key={i.key} value={i.key}>{i.summary} · {owner(model, i)}</option>
+          ))}
+        </datalist>
+        <button type="submit" className="jtm-btn jtm-btn--small">Add</button>
+      </form>
+      <label className="jtm-inline-field">
+        <span className="jtm-sr-only">Person</span>
+        <select value={personId} onChange={(ev) => onPerson(ev.target.value)} data-testid="viewing-as">
+          {model.people.filter((p) => !p.reporterOnly).map((p) => (
+            <option key={p.accountId} value={p.accountId}>{p.name}{p.team ? ` · ${p.team}` : ''}</option>
+          ))}
+        </select>
+      </label>
+      <button type="button" className="jtm-btn jtm-btn--small" onClick={() => onShowOnMap(personId)}>Show on team map</button>
+    </div>
+  );
 
   return (
     <div className="jtm-mywork" data-testid="my-work">
+      {toolbarSlot && createPortal(actions, toolbarSlot)}
       <header className="jtm-board-header">
         <div className="jtm-person-head">
           <span className="jtm-avatar" aria-hidden="true">{initials(me.name)}</span>
-          <div>
-            <h1>{me.name}</h1>
-            <p>{me.team ?? 'No team'} · {ownOpen} open · {ownDone} done in the last 12 months · {board.lines.length} {board.lines.length === 1 ? 'link' : 'links'}</p>
-          </div>
+          <h2>{me.name}</h2>
+          <p>{me.team ?? 'No team'} · {ownOpen} open · {ownDone} done in the last 12 months · {board.lines.length} {board.lines.length === 1 ? 'link' : 'links'}</p>
         </div>
-        <div className="jtm-board-actions">
-          <label className="jtm-inline-field">
-            Person{' '}
-            <select value={personId} onChange={(ev) => onPerson(ev.target.value)} data-testid="viewing-as">
-              {model.people.filter((p) => !p.reporterOnly).map((p) => (
-                <option key={p.accountId} value={p.accountId}>{p.name}{p.team ? ` · ${p.team}` : ''}</option>
-              ))}
-            </select>
-          </label>
-          <form
-            className="jtm-inline-field"
-            onSubmit={(ev) => {
-              ev.preventDefault();
-              const key = addValue.trim().toUpperCase().split(/\s/)[0];
-              if (model.issueByKey.get(key) && !model.issueByKey.get(key).isEpic) {
-                setPinned((prev) => [...new Set([...prev, model.issueByKey.get(key).workKey])]);
-                setAddValue('');
-              }
-            }}
-          >
-            <label htmlFor="jtm-add-card">Add a card</label>
-            <input id="jtm-add-card" list="jtm-add-card-options" value={addValue} onChange={(ev) => setAddValue(ev.target.value)} placeholder="Ticket key" data-testid="add-card" />
-            <datalist id="jtm-add-card-options">
-              {allKeys.map((i) => (
-                <option key={i.key} value={i.key}>{i.summary} · {owner(model, i)}</option>
-              ))}
-            </datalist>
-            <button type="submit" className="jtm-btn">Add</button>
-          </form>
-          <button type="button" className="jtm-btn" onClick={() => onShowOnMap(personId)}>Show on team map</button>
-        </div>
+        {!toolbarSlot && actions}
       </header>
 
-      <div className="jtm-map-toolbar">
-        <div className="jtm-wl-legend" aria-label="Line key">
-          <span><svg width="30" height="8" aria-hidden="true"><path d="M1,4 H29" className="jtm-wl jtm-wl--context" /></svg> builds on, follows up on, replaces, fixes: context</span>
-          <span><svg width="30" height="8" aria-hidden="true"><path d="M1,4 H29" className="jtm-wl jtm-wl--related" /></svg> related to: search only</span>
-          <span><svg width="30" height="8" aria-hidden="true"><path d="M1,4 H29" className="jtm-wl jtm-wl--ghost" /></svg> suggestion</span>
-        </div>
-        <span className="jtm-muted">Drag from one card to another to link them</span>
-      </div>
       <p className="jtm-status-line" role="status" aria-live="polite" data-testid="mywork-status">{status}</p>
 
       <div className={`jtm-stage${view && !compact ? ' jtm-stage--drawer' : ''}`}>
         <div className="jtm-board-scroll">
+        <div className="jtm-frame-head">
+          <div className="jtm-wl-legend" aria-label="Line key">
+            <span><svg width="30" height="8" aria-hidden="true"><path d="M1,4 H29" className="jtm-wl jtm-wl--context" /></svg> builds on, follows up on, replaces, fixes: context</span>
+            <span><svg width="30" height="8" aria-hidden="true"><path d="M1,4 H29" className="jtm-wl jtm-wl--related" /></svg> related to: search only</span>
+          </div>
+          <span className="jtm-muted">Drag from one card to another to link them</span>
+        </div>
+
           <div
             className={`jtm-board-inner${drag ? ' jtm-board-inner--drawing' : ''}`}
             ref={innerRef}
@@ -360,7 +344,7 @@ export default function MyWork({ model, personId, onPerson, dismissed, onDismiss
               setDrag(null);
             }}
             onClick={(ev) => {
-              if (!compact && view && !ev.target.closest('[data-card], [data-line], [data-ghost], .jtm-popup')) setView(null);
+              if (!compact && view && !ev.target.closest('[data-card], [data-line], .jtm-popup')) setView(null);
             }}
           >
             <div className="jtm-cols">
@@ -376,7 +360,7 @@ export default function MyWork({ model, personId, onPerson, dismissed, onDismiss
                       data-kind={c.kind}
                       role="button"
                       tabIndex={0}
-                      aria-label={`${c.key} ${c.issue.summary}, ${c.issue.status}, ${owner(model, c.issue)}${c.kind === 'ghost' ? ', suggested' : ''}. Open details and links.`}
+                      aria-label={`${c.key} ${c.issue.summary}, ${c.issue.status}, ${owner(model, c.issue)}. Open details and links.`}
                       onPointerDown={(ev) => onPointerDown(ev, c.key)}
                       onKeyDown={(ev) => {
                         if (ev.key === 'Enter' || ev.key === ' ') {
@@ -405,33 +389,12 @@ export default function MyWork({ model, personId, onPerson, dismissed, onDismiss
 
             <svg className="jtm-board-lines" width={geo.w} height={geo.h} aria-hidden={false} data-testid="board-lines">
               <defs>
-                {['context', 'related', 'ghost'].map((k) => (
+                {['context', 'related'].map((k) => (
                   <marker key={k} id={`jtm-wl-arrow-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                     <path d="M0,0 L10,5 L0,10 z" className={`jtm-wl-head jtm-wl-head--${k}`} />
                   </marker>
                 ))}
               </defs>
-              {board.ghostLines.map((g) => {
-                const route = routes.get(g.id);
-                if (!route) return null;
-                const { d, mid } = route;
-                return (
-                  <g key={g.id} data-ghost={g.id}>
-                    <path d={d} className="jtm-wl jtm-wl--ghost" markerEnd="url(#jtm-wl-arrow-ghost)" />
-                    <g
-                      className="jtm-wl-q"
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`Suggestion: ${g.fromKey} may build on ${g.toKey} (${g.reason}). Open to confirm or dismiss.`}
-                      onClick={() => setView({ kind: 'ghost', ghost: g })}
-                      onKeyDown={(ev) => (ev.key === 'Enter' || ev.key === ' ') && (ev.preventDefault(), setView({ kind: 'ghost', ghost: g }))}
-                    >
-                      <circle cx={mid.x} cy={mid.y} r={10} />
-                      <text x={mid.x} y={mid.y + 4} textAnchor="middle">?</text>
-                    </g>
-                  </g>
-                );
-              })}
               {board.lines.map((l) => {
                 const route = routes.get(l.id);
                 if (!route) return null;
@@ -494,20 +457,6 @@ export default function MyWork({ model, personId, onPerson, dismissed, onDismiss
               </div>
             );
           })()}
-          {view?.kind === 'ghost' && (
-            <GhostPanel
-              model={model}
-              ghost={view.ghost}
-              onAdd={(link) => {
-                addLink(link);
-                setView(null);
-              }}
-              onDismiss={(pair) => {
-                onDismiss(pair);
-                setView(null);
-              }}
-            />
-          )}
         </Drawer>
       </div>
     </div>

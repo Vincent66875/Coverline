@@ -10,7 +10,7 @@ import MyWork from './components/MyWork.jsx';
 import { addRelation, canAdd, changeRelation, loadList, removeRelation, saveList } from './analysis/relations.js';
 import { RELATION_TYPES } from './analysis/relationTypes.js';
 import { AbsencePanel, DataQuality, Keys, PersonDetail, Ranking, SearchBox, TicketList, WorkedOnPanel, ZoomControl } from './components/Panels.jsx';
-import { EmptyMapNotice, SetupBanner, SetupPanel, SinglePersonPanel, TeamEditor } from './components/SetupPanels.jsx';
+import { EmptyMapNotice, SetupPanel, SinglePersonPanel, TeamEditor } from './components/SetupPanels.jsx';
 import { setupStatus, singlePersonWork } from './analysis/coverage.js';
 
 const COMPACT_BELOW = 1000; // px of app width; below this the panel overlays the map
@@ -33,6 +33,32 @@ function useCompact(ref, px) {
  * In Forge, links are saved by `linkOps` (Jira links or app storage) and app-stored links arrive as
  * `extraRelations`; without `linkOps` (local MVP) links and dismissals live in this browser.
  */
+/** "More ▾": the less-used map panels. Closes on choose, Esc or a click outside. */
+function MoreMenu({ items }) {
+  const [openMenu, setOpenMenu] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!openMenu) return undefined;
+    const away = (ev) => { if (!ref.current?.contains(ev.target)) setOpenMenu(false); };
+    const esc = (ev) => { if (ev.key === 'Escape') { setOpenMenu(false); ref.current?.querySelector('button')?.focus(); } };
+    document.addEventListener('pointerdown', away);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', esc); };
+  }, [openMenu]);
+  return (
+    <div className="jtm-more" ref={ref}>
+      <button type="button" className="jtm-btn jtm-btn--small" aria-expanded={openMenu} aria-haspopup="true" onClick={() => setOpenMenu((o) => !o)} data-testid="more">More ▾</button>
+      {openMenu && (
+        <ul className="jtm-more-menu" role="menu">
+          {items.map(([label, run]) => (
+            <li key={label}><button type="button" role="menuitem" onClick={() => { setOpenMenu(false); run(); }}>{label}</button></li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function App({
   fixture,
   initialZoom = 'ticket',
@@ -50,6 +76,8 @@ export default function App({
   onPrefs = null,
 }) {
   const rootRef = useRef(null);
+  const searchRef = useRef(null);
+  const [toolbarSlot, setToolbarSlot] = useState(null); // My work puts its controls here
   const compact = useCompact(rootRef, COMPACT_BELOW);
   const store = fixture.name ?? 'default';
   const local = !linkOps;
@@ -240,6 +268,7 @@ export default function App({
     if (onPrefs) onPrefs(next);
     else setLocalPrefs(next);
   };
+  const setupChip = setup.todo > 0 && !prefs.setupBannerDismissed;
   const setupAction = (action) => {
     if (action === 'teams') push({ kind: 'teams' });
     else if (action === 'single') push({ kind: 'single' });
@@ -264,43 +293,58 @@ export default function App({
   return (
     <div className="jtm" ref={rootRef}>
       <main className={`jtm-main jtm-board${simulating ? ' jtm-simulation' : ''}`}>
-        <nav className="jtm-tabs" aria-label="Views">
-          {[['map', 'Team map'], ['mywork', 'My work']].map(([v, l]) => (
-            <button key={v} type="button" className={`jtm-tab${tab === v ? ' jtm-tab--on' : ''}`} aria-current={tab === v ? 'page' : undefined} onClick={() => switchTab(v)} data-tab={v}>{l}</button>
-          ))}
-        </nav>
+        <div className="jtm-topbar">
+          <nav className="jtm-tabs" aria-label="Views">
+            {[['map', 'Team'], ['mywork', 'My work']].map(([v, l]) => (
+              <button key={v} type="button" className={`jtm-tab${tab === v ? ' jtm-tab--on' : ''}`} aria-current={tab === v ? 'page' : undefined} onClick={() => switchTab(v)} data-tab={v}>{l}</button>
+            ))}
+          </nav>
+          {tab === 'map' && (
+            <div className="jtm-topbar-actions" role="toolbar" aria-label="Team map">
+              <SearchBox compact model={model} inputRef={searchRef} id="jtm-top-search" onSearch={(v) => open({ kind: 'worked', result: whoHasWorkedOn(model, v, { absent }) })} />
+              <button type="button" className="jtm-btn jtm-btn--small" onClick={() => open({ kind: 'single' })} data-testid="open-single">One-person work <span className="jtm-count-pill">{single.count}</span></button>
+              <button type="button" className={`jtm-btn jtm-btn--small${simulating ? ' jtm-btn--on' : ''}`} aria-pressed={simulating} onClick={() => {
+                if (simulating) { setAbsent(new Set()); setSimulating(false); }
+                else { setSimulating(true); open({ kind: 'ranking' }); }
+              }}>{simulating ? 'Exit simulation' : 'Simulate absence'}</button>
+              {setupChip && (
+                <span className="jtm-setup-chip" data-testid="setup-banner">
+                  <button type="button" className="jtm-btn jtm-btn--small jtm-btn--attn" onClick={() => open({ kind: 'setup' })} data-testid="open-setup" title={`${setup.todo} ${setup.todo === 1 ? 'thing' : 'things'} would make this map more useful`}>
+                    Set up <span className="jtm-count-pill jtm-count-pill--todo" aria-label={`${setup.todo} to do`}>{setup.todo}</span>
+                  </button>
+                  <button type="button" className="jtm-chip-x" onClick={dismissBanner} aria-label="Hide setup reminder (Set up stays under More)" title="Hide (Set up stays under More)">×</button>
+                </span>
+              )}
+              <MoreMenu
+                items={[
+                  ['People & coverage', () => open({ kind: 'ranking' })],
+                  ...(setupChip ? [] : [[`Set up${setup.todo ? ` (${setup.todo} to do)` : ''}`, () => open({ kind: 'setup' })]]),
+                  ['Edit teams', () => open({ kind: 'teams' })],
+                  ['Data & coverage', () => open({ kind: 'data' })],
+                  ['Map key', () => open({ kind: 'key' })],
+                ]}
+              />
+            </div>
+          )}
+          {tab === 'mywork' && <div className="jtm-topbar-actions" ref={setToolbarSlot} />}
+        </div>
         {tab === 'mywork' && (
           <MyWork
             model={model}
             personId={viewer}
             onPerson={(id) => { setViewer(id); setStatus(''); }}
-            dismissed={dismissed}
             onAddLink={addLink}
             onChangeLink={changeLink}
             onRemoveLink={removeLink}
             compact={compact}
-            onDismiss={dismiss}
             jiraEditable={!local}
             onShowOnMap={(id) => { switchTab('map'); selectPerson(id); }}
             status={status}
+            toolbarSlot={toolbarSlot}
           />
         )}
         {tab === 'map' && <>
-        <header className="jtm-board-header">
-          <div><h1>Team map</h1><p>Recorded dependencies between people</p></div>
-          <div className="jtm-board-actions">
-            <button type="button" className="jtm-btn" onClick={() => open({ kind: 'search' })}>Find work</button>
-            <button type="button" className="jtm-btn" onClick={() => open({ kind: 'single' })} data-testid="open-single">One-person work <span className="jtm-count-pill">{single.count}</span></button>
-            <button type="button" className="jtm-btn" onClick={() => open({ kind: 'ranking' })}>People &amp; coverage</button>
-            <button type="button" className="jtm-btn" onClick={() => open({ kind: 'data' })}>Data &amp; coverage</button>
-            <button type="button" className="jtm-btn" onClick={() => open({ kind: 'key' })}>Map key</button>
-            <button type="button" className="jtm-btn" onClick={() => open({ kind: 'setup' })} data-testid="open-setup">Set up{setup.todo > 0 && <span className="jtm-count-pill jtm-count-pill--todo" aria-label={`${setup.todo} to do`}>{setup.todo}</span>}</button>
-            <button type="button" className="jtm-btn" aria-pressed={simulating} onClick={() => {
-              if (simulating) { setAbsent(new Set()); setSimulating(false); }
-              else { setSimulating(true); open({ kind: 'ranking' }); }
-            }}>{simulating ? 'Exit simulation' : 'Simulate absence'}</button>
-          </div>
-        </header>
+        <h2 className="jtm-sr-only">Team: recorded dependencies between people</h2>
         {simulating && (
           <div className="jtm-simulation-bar" role="status">
             <span>Absence simulation · {absent.size} marked out</span>
@@ -308,12 +352,9 @@ export default function App({
             {data.impact && <button type="button" className="jtm-btn jtm-btn--small" onClick={() => open({ kind: 'impact' })}>View impact</button>}
           </div>
         )}
-        {setup.todo > 0 && !prefs.setupBannerDismissed && <SetupBanner todo={setup.todo} onOpen={() => open({ kind: 'setup' })} onDismiss={dismissBanner} />}
         {model.personEdges.length === 0 && (
-          <EmptyMapNotice single={single} onSingle={() => open({ kind: 'single' })} onSearch={() => open({ kind: 'search' })} onSetup={() => open({ kind: 'setup' })} />
+          <EmptyMapNotice single={single} onSingle={() => open({ kind: 'single' })} onSearch={() => searchRef.current?.focus()} onSetup={() => open({ kind: 'setup' })} />
         )}
-        <div className="jtm-map-toolbar"><ZoomControl zoom={zoom} onZoom={setZoom} /><span className="jtm-muted">Select a person or a badge for details</span></div>
-
         <div className={`jtm-stage${view && !compact ? ' jtm-stage--drawer' : ''}`}>
           <PeopleGraph
             model={model}
@@ -323,6 +364,17 @@ export default function App({
             onSelect={selectPerson}
             onBadge={(_id, key) => open({ kind: 'worked', result: whoHasWorkedOn(model, key, { absent }) })}
             onBackground={view && !compact ? closeAll : undefined}
+            head={
+              <>
+                <ZoomControl zoom={zoom} onZoom={setZoom} />
+                <span className="jtm-mini-key">
+                  <span><i className="jtm-mk-arrow" aria-hidden="true" />waits on</span>
+                  <span><i className="jtm-mk-arrow jtm-mk-arrow--red" aria-hidden="true" />blocked or overdue</span>
+                  <span><i className="jtm-mk-badge" aria-hidden="true">1</i>one person has worked on it</span>
+                  <button type="button" className="jtm-link" onClick={() => open({ kind: 'key' })}>Map key</button>
+                </span>
+              </>
+            }
           />
           <Drawer open={!!view} compact={compact} title={title} onClose={closeAll} onBack={stack.length > 1 ? back : null}>
             {view?.kind === 'search' && <><p>Search for a ticket or area to find people who have worked on it.</p><SearchBox model={model} onSearch={search} /></>}

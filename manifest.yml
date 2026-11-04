@@ -12,6 +12,7 @@ modules:
       resolver:
         function: resolver
       title: Team map
+      layout: blank
   function:
     - key: resolver
       handler: index.handler
