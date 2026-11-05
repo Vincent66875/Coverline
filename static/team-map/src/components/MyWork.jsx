@@ -11,6 +11,7 @@ import Avatar from './Avatar.jsx';
 import Icon from './Icons.jsx';
 import { InfoButton, ToolButton } from './Toolbar.jsx';
 import { Combobox, PersonPicker } from './Combobox.jsx';
+import Select from './Select.jsx';
 
 const DRAG_START_PX = 6;
 const owner = (model, issue) => (issue.ownerId ? model.nameOf(issue.ownerId) : 'unassigned');
@@ -89,14 +90,17 @@ function LinkEditor({ model, link, onChange, onRemove, jiraEditable = false }) {
         <p className="jtm-muted"><span className="jtm-pill jtm-pill--jira">Jira link</span> Change or remove it in Jira.</p>
       ) : (
         <div className="jtm-link-edit">
-          <label>
-            Relation{' '}
-            <select value={link.type} onChange={(ev) => onChange(link, { type: ev.target.value })} aria-label={`Relation for ${link.fromKey} and ${link.toKey}`}>
-              {RELATION_ORDER.map((t) => (
-                <option key={t} value={t}>{RELATION_TYPES[t].label}</option>
-              ))}
-            </select>
-          </label>
+          <span className="jtm-link-edit-field">
+            <span aria-hidden="true">Relation</span>
+            <Select
+              small
+              label={`Relation for ${link.fromKey} and ${link.toKey}`}
+              value={link.type}
+              onChange={(v) => onChange(link, { type: v })}
+              testid="link-relation"
+              options={RELATION_ORDER.map((t) => ({ value: t, label: RELATION_TYPES[t].label }))}
+            />
+          </span>
           <button type="button" className="jtm-link" onClick={() => onChange(link, { swap: true })}>⇄ Swap</button>
           <button type="button" className="jtm-link jtm-danger" onClick={() => onRemove(link)} aria-label={`Remove link: ${link.fromKey} ${RELATION_TYPES[link.type].label} ${link.toKey}`}>Remove</button>
         </div>
@@ -137,14 +141,17 @@ function CardPanel({ model, cardKey, boardKeys, onAdd, onChange, onRemove, onUnp
           <p className="jtm-muted">Add a card first (“Add a card” above).</p>
         ) : (
           <>
-            <label className="jtm-field">
-              Card{' '}
-              <select value={target} onChange={(ev) => setTarget(ev.target.value)} data-testid="link-target">
-                {others.map((k) => (
-                  <option key={k} value={k}>{k} {model.issueByKey.get(k).summary}</option>
-                ))}
-              </select>
-            </label>
+            <span className="jtm-field jtm-link-edit-field">
+              <span aria-hidden="true">Card</span>
+              <Select
+                small
+                label="Card to link"
+                value={target}
+                onChange={setTarget}
+                testid="link-target"
+                options={others.map((k) => ({ value: k, label: `${k} ${model.issueByKey.get(k).summary}` }))}
+              />
+            </span>
             <p className="jtm-popup-sentence"><code>{from}</code> <strong>{RELATION_TYPES[type].label}</strong> <code>{to}</code></p>
             <TypeChoice name={`jtm-card-type-${cardKey}`} value={type} onChange={setType} />
             {!check.ok && <p className="jtm-warn">{check.reason}</p>}

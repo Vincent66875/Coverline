@@ -63,6 +63,17 @@ const groupName = (g) => (typeof g === 'string' ? g : g?.name ?? '');
 export function buildModel(data, options = {}) {
   // teams set in the app (team editor): { [accountId]: teamName }; they win over every other source
   const teamOverrides = options.teamOverrides ?? {};
+  // team renames made in the app: { oldName: newName }; applied to every team name that is not set per person
+  const teamAliases = options.teamAliases ?? {};
+  const renamed = (t) => {
+    let name = t;
+    const seen = new Set();
+    while (name && teamAliases[name] && !seen.has(name)) {
+      seen.add(name);
+      name = teamAliases[name];
+    }
+    return name;
+  };
   const now = options.now ?? data.asOf ?? new Date().toISOString();
   const nowMs = toMs(now);
 
@@ -233,6 +244,9 @@ export function buildModel(data, options = {}) {
       team = projectNames.get(key) ?? key;
       teamSource = 'project key';
     }
+    if (teamSource !== 'set in app') team = renamed(team);
+    const derived = derivedTeam(a, grp, assignedProjects, projectNames);
+    derived.derivedTeam = renamed(derived.derivedTeam);
     const owned = issues.filter((i) => i.ownerId === a.accountId && !i.isEpic);
     people.push({
       accountId: a.accountId,
@@ -240,7 +254,7 @@ export function buildModel(data, options = {}) {
       avatarUrl: a.avatarUrl ?? null,
       team,
       teamSource,
-      ...derivedTeam(a, grp, assignedProjects, projectNames),
+      ...derived,
       openKeys: sortKeys(owned.filter((i) => !i.done && isWorkItem(i)).map((i) => i.key)),
       openSubtaskKeys: sortKeys(owned.filter((i) => !i.done && i.isSubtask).map((i) => i.key)),
       reporterOnly: owned.length === 0 && issues.some((i) => i.reporterId === a.accountId),

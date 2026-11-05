@@ -141,9 +141,10 @@ export function setupStatus(model, { meta = null, linkCoverage = null } = {}) {
 export function teamRoster(model) {
   return [...model.people]
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map((p) => ({ accountId: p.accountId, name: p.name, team: p.team, source: p.teamSource, suggested: p.derivedTeam, suggestedSource: p.derivedSource, reporterOnly: p.reporterOnly }));
+    .map((p) => ({ accountId: p.accountId, name: p.name, avatarUrl: p.avatarUrl ?? null, team: p.team, source: p.teamSource, suggested: p.derivedTeam, suggestedSource: p.derivedSource, reporterOnly: p.reporterOnly }));
 }
 
+/** Teams that have at least one person in them now (a renamed or emptied team disappears). */
 export function teamNames(model) {
-  return [...new Set(model.people.flatMap((p) => [p.team, p.derivedTeam]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  return [...new Set(model.people.map((p) => p.team).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }

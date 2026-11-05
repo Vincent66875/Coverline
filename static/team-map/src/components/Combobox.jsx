@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import Icon from './Icons.jsx';
 import Avatar from './Avatar.jsx';
+import { useLiveState } from './Select.jsx';
 
 const MAX_SHOWN = 8;
 
@@ -118,21 +119,24 @@ export function Combobox({ id, icon, placeholder, title, label, options, onSubmi
  * people: [{ accountId, name, team, avatarUrl }].
  */
 export function PersonPicker({ people, value, onChange, testid }) {
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(-1);
+  const [open, setOpen, openRef] = useLiveState(false);
+  const [active, setActive, activeRef] = useLiveState(-1);
   const wrap = useRef(null);
   const btn = useRef(null);
   const listId = useId();
   const me = people.find((p) => p.accountId === value) ?? people[0];
+  const openList = () => {
+    setActive(Math.max(0, people.findIndex((p) => p.accountId === value)));
+    setOpen(true);
+  };
   useEffect(() => {
     if (!open) return undefined;
-    setActive(Math.max(0, people.findIndex((p) => p.accountId === value)));
     const away = (ev) => {
       if (!wrap.current?.contains(ev.target)) setOpen(false);
     };
     document.addEventListener('pointerdown', away);
     return () => document.removeEventListener('pointerdown', away);
-  }, [open, people, value]);
+  }, [open]);
   const choose = (p) => {
     setOpen(false);
     btn.current?.focus();
@@ -144,10 +148,10 @@ export function PersonPicker({ people, value, onChange, testid }) {
       className="jtm-menu jtm-person-pick"
       ref={wrap}
       onKeyDown={(ev) => {
-        if (!open) return;
+        if (!openRef.current) return;
         if (ev.key === 'ArrowDown') { ev.preventDefault(); setActive((a) => Math.min(a + 1, people.length - 1)); }
         else if (ev.key === 'ArrowUp') { ev.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
-        else if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); if (people[active]) choose(people[active]); }
+        else if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); if (people[activeRef.current]) choose(people[activeRef.current]); }
         else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); setOpen(false); btn.current?.focus(); }
         else if (ev.key === 'Tab') setOpen(false);
       }}
@@ -164,11 +168,12 @@ export function PersonPicker({ people, value, onChange, testid }) {
         title="Whose work to show"
         data-testid={testid}
         data-value={value}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => (openRef.current ? setOpen(false) : openList())}
         onKeyDown={(ev) => {
-          if (!open && (ev.key === 'ArrowDown' || ev.key === 'ArrowUp')) {
+          if (!openRef.current && (ev.key === 'ArrowDown' || ev.key === 'ArrowUp')) {
             ev.preventDefault();
-            setOpen(true);
+            ev.stopPropagation();
+            openList();
           }
         }}
       >

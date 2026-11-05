@@ -515,3 +515,35 @@
 .jtm .jtm-person-opt-name { font-size: 14px; }
 .jtm .jtm-combo-list .jtm-menu-check { color: var(--jtm-blue); }
 .jtm .jtm-person-pick .jtm-person-opt .jtm-mini-avatar, .jtm .jtm-person-pick .jtm-person-btn .jtm-mini-avatar { position: static; left: auto; }
+
+/* Edit teams: two columns (person | team) so nothing wraps in the side panel */
+.jtm .jtm-roster { width: 100%; table-layout: fixed; }
+.jtm .jtm-roster th:first-child { width: 52%; }
+.jtm .jtm-roster-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.jtm .jtm-roster-who > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.jtm .jtm-roster-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jtm .jtm-roster-from { font-size: 12px; font-weight: 400; color: var(--jtm-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jtm .jtm-roster .jtm-mini-avatar { width: 24px; height: 24px; font-size: 10px; flex: none; }
+.jtm .jtm-roster select { width: 100%; height: 32px; border-radius: 6px; }
+
+/* ================= app-styled select (replaces the browser's <select>) ================= */
+.jtm .jtm-select { position: relative; display: inline-flex; min-width: 0; }
+.jtm .jtm-select-btn { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-width: 0; height: 40px; padding: 0 10px 0 12px; border: 1px solid #c1c7d0; border-radius: 6px; background: var(--jtm-bg); color: var(--jtm-text); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.jtm .jtm-select--small .jtm-select-btn { height: 32px; font-size: 13px; }
+.jtm .jtm-select-btn:hover { background: #f1f2f4; }
+.jtm .jtm-select-btn[aria-expanded='true'] { border-color: var(--jtm-blue); box-shadow: inset 0 0 0 1px var(--jtm-blue); background: var(--jtm-bg); }
+.jtm .jtm-select-btn:focus-visible { outline: 2px solid var(--jtm-blue); outline-offset: 2px; }
+.jtm .jtm-select-btn:disabled { opacity: .6; cursor: default; }
+.jtm .jtm-select-btn .jtm-icon { color: var(--jtm-subtle); }
+.jtm .jtm-select-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jtm .jtm-select-list { min-width: 100%; width: max-content; max-width: 320px; }
+.jtm .jtm-select-list--up { top: auto; bottom: calc(100% + 4px); }
+.jtm .jtm-select .jtm-menu-list { left: 0; right: auto; }
+.jtm .jtm-select-opt { grid-template-columns: 1fr 16px; align-items: center; gap: 12px; padding: 7px 14px; font-size: 14px; }
+.jtm .jtm-select-opt--action { color: var(--jtm-blue); }
+.jtm .jtm-select-opt--divider { border-top: 1px solid var(--jtm-border); margin-top: 4px; padding-top: 9px; }
+.jtm .jtm-roster .jtm-select { width: 100%; }
+.jtm .jtm-link-edit-field { display: inline-flex; align-items: center; gap: 8px; }
+.jtm .jtm-link-edit-field .jtm-select { min-width: 160px; }
+.jtm .jtm-field.jtm-link-edit-field { display: flex; }
+.jtm .jtm-field.jtm-link-edit-field .jtm-select { flex: 1; min-width: 0; }

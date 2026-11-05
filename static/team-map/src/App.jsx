@@ -14,6 +14,7 @@ import { EmptyMapNotice, SetupPanel, SinglePersonPanel, TeamEditor } from './com
 import { MenuButton, ToolButton } from './components/Toolbar.jsx';
 import Icon from './components/Icons.jsx';
 import { ZOOMS } from './analysis/labels.js';
+import { ALIAS_PREFIX, renameChanges, splitTeams } from './analysis/teamAliases.js';
 import { setupStatus, singlePersonWork } from './analysis/coverage.js';
 
 const COMPACT_BELOW = 1000; // px of app width; below this the panel overlays the map
@@ -79,11 +80,12 @@ export default function App({
   useEffect(() => {
     if (!onPrefs) saveList(store, 'prefs', Object.entries(localPrefs));
   }, [onPrefs, store, localPrefs]);
-  const teamOverrides = teamOps ? teamOps.teams : localTeams;
+  // stored teams hold per-person teams and renames ("alias:…" keys); see analysis/teamAliases.js
+  const { overrides: teamOverrides, aliases: teamAliases } = useMemo(() => splitTeams(teamOps ? teamOps.teams : localTeams), [teamOps, localTeams]);
   const prefs = onPrefs ? prefsProp ?? {} : localPrefs;
   const [teamBusy, setTeamBusy] = useState(false);
   const [teamStatus, setTeamStatus] = useState('');
-  const model = useMemo(() => buildModel(fixture, { extraRelations: relations, teamOverrides }), [fixture, relations, teamOverrides]);
+  const model = useMemo(() => buildModel(fixture, { extraRelations: relations, teamOverrides, teamAliases }), [fixture, relations, teamOverrides, teamAliases]);
   const single = useMemo(() => singlePersonWork(model), [model]);
   const setup = useMemo(() => setupStatus(model, { meta, linkCoverage }), [model, meta, linkCoverage]);
   const [tab, setTab] = useState(initialTab);
@@ -217,8 +219,9 @@ export default function App({
       setStatus(`Not removed: ${e.message}`);
     }
   };
-  const saveTeams = async (changes) => {
-    const n = Object.keys(changes).length;
+  const saveTeams = async (changes, done = null) => {
+    const people = Object.keys(changes).filter((k) => !k.startsWith(ALIAS_PREFIX)).length;
+    const n = Math.max(1, people);
     if (!teamOps) {
       setLocalTeams((prev) => {
         const next = { ...prev };
@@ -228,14 +231,14 @@ export default function App({
         }
         return next;
       });
-      setTeamStatus(`Saved ${n === 1 ? '1 change' : `${n} changes`}.`);
+      setTeamStatus(done ?? `Saved ${n === 1 ? '1 change' : `${n} changes`}.`);
       return;
     }
     setTeamBusy(true);
     setTeamStatus('Saving…');
     try {
       await teamOps.save(changes);
-      setTeamStatus(`Saved ${n === 1 ? '1 change' : `${n} changes`}.`);
+      setTeamStatus(done ?? `Saved ${n === 1 ? '1 change' : `${n} changes`}.`);
     } catch (e) {
       setTeamStatus(`Not saved: ${e.message}`);
     } finally {
@@ -380,7 +383,7 @@ export default function App({
             {view?.kind === 'teams' && (
               <>
                 <p className="jtm-status-line" role="status" aria-live="polite" data-testid="team-status">{teamStatus}</p>
-                <TeamEditor model={model} onSave={saveTeams} focusId={view.focusId ?? null} busy={teamBusy} />
+                <TeamEditor model={model} onSave={saveTeams} onRename={(from, to) => saveTeams(renameChanges({ overrides: teamOverrides, aliases: teamAliases }, from, to), `Renamed ${from} to ${to}.`)} focusId={view.focusId ?? null} busy={teamBusy} />
               </>
             )}
             {view?.kind === 'key' && <><ul className="jtm-key-list"><li>Arrow points from the person waiting to the person they wait on.</li><li>Red arrow: the blocking task is blocked or overdue.</li><li>Green check: another person has worked on the blocking task.</li><li>Amber 1: only one person has worked on the blocking task.</li><li>Larger person nodes indicate higher coverage risk.</li><li>Dotted green line: someone has worked on the selected person's work, or on earlier work it builds on.</li><li>Links recorded in My work or in Jira (builds on, follows up on, replaces, fixes) count as context. “Related to” is used by search only. None of them adds an arrow.</li><li>In absence simulation, rings indicate people left waiting or people with context.</li></ul>{teams.length > 0 && <><h3>Team connections</h3><ul>{teams.map((t) => <li key={t.id}><Keys keys={t.keys} title={t.sentence} onOpen={openTickets}>{t.sentence}</Keys></li>)}</ul></>}</>}

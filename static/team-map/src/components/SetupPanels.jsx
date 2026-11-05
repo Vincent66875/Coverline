@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { RELATION_TYPES } from '../analysis/relationTypes.js';
 import { teamNames, teamRoster } from '../analysis/coverage.js';
 import { Keys } from './Panels.jsx';
+import Avatar from './Avatar.jsx';
+import Select from './Select.jsx';
 
 const SOURCE_TEXT = { 'set in app': 'set here', 'team field': 'Team field', 'jira group': 'Jira group', 'project key': 'main project', none: 'no team' };
 const LINK_TYPE_ROWS = {
@@ -134,7 +136,7 @@ function LinkTypeTable({ missing }) {
  * Team editor. Anyone can change teams; teams are shared across all projects on the site.
  * onSave({ [accountId]: team | '' }) saves a batch ('' = back to the suggested team).
  */
-export function TeamEditor({ model, onSave, focusId = null, busy = false }) {
+export function TeamEditor({ model, onSave, onRename, focusId = null, busy = false }) {
   const roster = useMemo(() => teamRoster(model), [model]);
   const names = useMemo(() => teamNames(model), [model]);
   const [newFor, setNewFor] = useState(null);
@@ -185,7 +187,7 @@ export function TeamEditor({ model, onSave, focusId = null, busy = false }) {
                 onSubmit={(ev) => {
                   ev.preventDefault();
                   const to = renameTo.trim();
-                  if (to && to !== t) onSave(Object.fromEntries(members(t).map((r) => [r.accountId, to])));
+                  if (to && to !== t) (onRename ? onRename(t, to) : onSave(Object.fromEntries(members(t).map((r) => [r.accountId, to]))));
                   setRenaming(null);
                 }}
               >
@@ -208,12 +210,20 @@ export function TeamEditor({ model, onSave, focusId = null, busy = false }) {
       <h4>People</h4>
       <table className="jtm-roster">
         <thead>
-          <tr><th scope="col">Person</th><th scope="col">Team</th><th scope="col">From</th></tr>
+          <tr><th scope="col">Person</th><th scope="col">Team</th></tr>
         </thead>
         <tbody>
           {roster.map((r) => (
             <tr key={r.accountId} data-roster={r.accountId} className={focusId === r.accountId ? 'jtm-roster--focus' : ''}>
-              <th scope="row">{r.name}</th>
+              <th scope="row">
+                <span className="jtm-roster-who">
+                  <Avatar name={r.name} url={r.avatarUrl} className="jtm-mini-avatar" />
+                  <span>
+                    <span className="jtm-roster-name">{r.name}</span>
+                    <span className="jtm-roster-from">{SOURCE_TEXT[r.source] ?? r.source}{r.reporterOnly ? ' · reports only' : ''}</span>
+                  </span>
+                </span>
+              </th>
               <td>
                 {newFor === r.accountId ? (
                   <form
@@ -229,15 +239,23 @@ export function TeamEditor({ model, onSave, focusId = null, busy = false }) {
                     <button type="submit" className="jtm-btn jtm-btn--small">Add</button>
                   </form>
                 ) : (
-                  <select value={r.team ?? ''} disabled={busy} onChange={(ev) => choose(r, ev.target.value)} aria-label={`Team for ${r.name}`} ref={focusId === r.accountId ? focusRef : undefined}>
-                    {!r.team && <option value="">No team</option>}
-                    {names.map((t) => <option key={t} value={t}>{t}</option>)}
-                    {r.source === 'set in app' && <option value="__suggested">Back to suggested{r.suggested ? ` (${r.suggested})` : ''}</option>}
-                    <option value="__new">+ New team…</option>
-                  </select>
+                  <Select
+                    small
+                    label={`Team for ${r.name}`}
+                    value={r.team ?? ''}
+                    disabled={busy}
+                    placeholder="No team"
+                    ref={focusId === r.accountId ? focusRef : undefined}
+                    onChange={(v) => choose(r, v)}
+                    testid={`team-select-${r.accountId}`}
+                    options={[
+                      ...names.map((t) => ({ value: t, label: t })),
+                      ...(r.source === 'set in app' && r.suggested !== r.team ? [{ value: '__suggested', label: 'Back to suggested', hint: r.suggested ? `(${r.suggested})` : '', action: true, divider: true }] : []),
+                      { value: '__new', label: '+ New team…', action: true, divider: !(r.source === 'set in app' && r.suggested !== r.team) },
+                    ]}
+                  />
                 )}
               </td>
-              <td className="jtm-muted">{SOURCE_TEXT[r.source] ?? r.source}{r.reporterOnly ? ' · reports only' : ''}</td>
             </tr>
           ))}
         </tbody>
