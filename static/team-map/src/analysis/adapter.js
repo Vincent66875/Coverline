@@ -70,10 +70,15 @@ export function buildModel(data, options = {}) {
   const accounts = new Map();
   const addAccount = (u, listed) => {
     if (!u?.accountId) return null;
+    const avatarUrl = u.avatarUrl ?? u.avatarUrls?.['48x48'] ?? null;
     const prev = accounts.get(u.accountId);
-    if (prev) return prev;
+    if (prev) {
+      if (!prev.avatarUrl && avatarUrl) prev.avatarUrl = avatarUrl;
+      return prev;
+    }
     const a = {
       accountId: u.accountId,
+      avatarUrl,
       displayName: u.displayName ?? u.accountId,
       active: u.active !== false,
       accountType: u.accountType ?? 'atlassian',
@@ -107,6 +112,7 @@ export function buildModel(data, options = {}) {
   };
   const isPerson = (id) => !!id && exclusionReason(accounts.get(id)) == null;
   const nameOf = (id) => accounts.get(id)?.displayName ?? 'Unassigned';
+  const avatarOf = (id) => accounts.get(id)?.avatarUrl ?? null;
 
   // ---------- issues ----------
   const issues = data.issues.map((raw) => {
@@ -231,6 +237,7 @@ export function buildModel(data, options = {}) {
     people.push({
       accountId: a.accountId,
       name: a.displayName,
+      avatarUrl: a.avatarUrl ?? null,
       team,
       teamSource,
       ...derivedTeam(a, grp, assignedProjects, projectNames),
@@ -599,6 +606,7 @@ export function buildModel(data, options = {}) {
     contextByIssue,
     dataQuality,
     nameOf,
+    avatarOf,
   };
 }
 

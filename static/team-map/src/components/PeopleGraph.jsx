@@ -10,6 +10,8 @@ const KEY_DIR = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDo
  * Hand-rolled SVG people graph. People are nodes; tickets are edge labels.
  * Arrow = "waits on", from waiter to blocker.
  */
+const clipId = (id) => `jtm-clip-${String(id).replace(/[^A-Za-z0-9_-]/g, '_')}`;
+
 export default function PeopleGraph({ model, data, selectedId = null, absent = new Set(), onSelect, onBadge, onBackground, head = null }) {
   const { layout, risk, baseline, labels, badges, edgeById, sentences, rings, knowledge } = data;
   const nodeById = useMemo(() => new Map(layout.nodes.map((n) => [n.id, n])), [layout]);
@@ -66,6 +68,7 @@ export default function PeopleGraph({ model, data, selectedId = null, absent = n
 
   const edgeFaded = (e) => related && !(e.from === selectedId || e.to === selectedId);
 
+  const [broken, setBroken] = useState(() => new Set());
   return (
     <div className="jtm-graph">
       {head && <div className="jtm-frame-head">{head}</div>}
@@ -187,7 +190,28 @@ export default function PeopleGraph({ model, data, selectedId = null, absent = n
             >
               {ring.map((r, i) => <circle key={r} cx={n.x} cy={n.y} r={n.r + 5 + i * 5} className={`jtm-ring jtm-ring--${r}`} />)}
               <circle cx={n.x} cy={n.y} r={n.r} />
-              <text x={n.x} y={n.y + 4} textAnchor="middle" className="jtm-node-initial" aria-hidden="true">{n.name.slice(0, 2)}</text>
+              {(() => {
+                const url = model.avatarOf(n.id);
+                if (!url || broken.has(url)) return <text x={n.x} y={n.y + 4} textAnchor="middle" className="jtm-node-initial" aria-hidden="true">{n.name.slice(0, 2)}</text>;
+                return (
+                  <>
+                    <clipPath id={clipId(n.id)}><circle cx={n.x} cy={n.y} r={n.r - 1} /></clipPath>
+                    <image
+                      href={url}
+                      x={n.x - n.r}
+                      y={n.y - n.r}
+                      width={n.r * 2}
+                      height={n.r * 2}
+                      clipPath={`url(#${clipId(n.id)})`}
+                      preserveAspectRatio="xMidYMid slice"
+                      className="jtm-node-photo"
+                      aria-hidden="true"
+                      onError={() => setBroken((prev) => new Set(prev).add(url))}
+                    />
+                    <circle cx={n.x} cy={n.y} r={n.r} className="jtm-node-frame" />
+                  </>
+                );
+              })()}
               <text x={n.x} y={n.y + n.r0 + 16} textAnchor="middle" className="jtm-node-name" aria-hidden="true">{n.name}{isOut ? ' · out' : ''}</text>
               <text x={n.x} y={n.y + n.r0 + 30} textAnchor="middle" className={`jtm-node-score${delta !== 0 && absent.size ? ' jtm-changed' : ''}`} aria-hidden="true">{scoreText}</text>
             </g>

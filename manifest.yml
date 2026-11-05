@@ -12,7 +12,7 @@ modules:
       resolver:
         function: resolver
       title: Team map
-      layout: blank
+      layout: blank   # no Jira page header: the app's own tab bar is the top of the page
   function:
     - key: resolver
       handler: index.handler
@@ -23,10 +23,15 @@ resources:
 
 permissions:
   scopes:
-    - read:jira-work # search issues, changelogs, link types
-    - write:jira-work # create / delete issue links drawn in My work
-    - read:jira-user # names on assignees, reporters, history authors
-    - storage:app # links with no Jira link type, dismissed suggestions
+    - read:jira-work      # search issues, changelogs, link types
+    - write:jira-work     # create / delete issue links drawn in My work
+    - read:jira-user      # names on assignees, reporters, history authors
+    - storage:app         # links with no Jira link type, dismissed suggestions
+  external:
+    images:                 # Jira avatars (profile pictures) shown on the map and in My work
+      - '*.atl-paas.net'    # Atlassian avatar service (uploaded pictures, default initials avatars)
+      - 'secure.gravatar.com'
+      - 'avatar-cdn.atlassian.com'
   content:
     styles:
-      - unsafe-inline # React sets a few inline styles (map size, popup position)
+      - unsafe-inline     # React sets a few inline styles (map size, popup position)

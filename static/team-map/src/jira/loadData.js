@@ -91,8 +91,14 @@ export function deriveUsers(issues, teamField) {
   const users = new Map();
   const teamVotes = new Map();
   const see = (u) => {
-    if (!u?.accountId || users.has(u.accountId)) return;
-    users.set(u.accountId, { accountId: u.accountId, displayName: u.displayName ?? u.accountId, active: u.active !== false, accountType: u.accountType ?? 'atlassian', groups: [] });
+    if (!u?.accountId) return;
+    const avatarUrl = u.avatarUrls?.['48x48'] ?? null; // the picture the person set in their Atlassian profile (or Atlassian's default)
+    const prev = users.get(u.accountId);
+    if (prev) {
+      if (!prev.avatarUrl && avatarUrl) prev.avatarUrl = avatarUrl;
+      return;
+    }
+    users.set(u.accountId, { accountId: u.accountId, displayName: u.displayName ?? u.accountId, active: u.active !== false, accountType: u.accountType ?? 'atlassian', groups: [], avatarUrl });
   };
   for (const i of issues) {
     const f = i.fields ?? {};

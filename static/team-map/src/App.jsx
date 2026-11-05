@@ -9,8 +9,11 @@ import PeopleGraph from './components/PeopleGraph.jsx';
 import MyWork from './components/MyWork.jsx';
 import { addRelation, canAdd, changeRelation, loadList, removeRelation, saveList } from './analysis/relations.js';
 import { RELATION_TYPES } from './analysis/relationTypes.js';
-import { AbsencePanel, DataQuality, Keys, PersonDetail, Ranking, SearchBox, TicketList, WorkedOnPanel, ZoomControl } from './components/Panels.jsx';
+import { AbsencePanel, DataQuality, Keys, PersonDetail, Ranking, SearchBox, TicketList, WorkedOnPanel } from './components/Panels.jsx';
 import { EmptyMapNotice, SetupPanel, SinglePersonPanel, TeamEditor } from './components/SetupPanels.jsx';
+import { MenuButton, ToolButton } from './components/Toolbar.jsx';
+import Icon from './components/Icons.jsx';
+import { ZOOMS } from './analysis/labels.js';
 import { setupStatus, singlePersonWork } from './analysis/coverage.js';
 
 const COMPACT_BELOW = 1000; // px of app width; below this the panel overlays the map
@@ -33,31 +36,7 @@ function useCompact(ref, px) {
  * In Forge, links are saved by `linkOps` (Jira links or app storage) and app-stored links arrive as
  * `extraRelations`; without `linkOps` (local MVP) links and dismissals live in this browser.
  */
-/** "More ▾": the less-used map panels. Closes on choose, Esc or a click outside. */
-function MoreMenu({ items }) {
-  const [openMenu, setOpenMenu] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    if (!openMenu) return undefined;
-    const away = (ev) => { if (!ref.current?.contains(ev.target)) setOpenMenu(false); };
-    const esc = (ev) => { if (ev.key === 'Escape') { setOpenMenu(false); ref.current?.querySelector('button')?.focus(); } };
-    document.addEventListener('pointerdown', away);
-    document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', esc); };
-  }, [openMenu]);
-  return (
-    <div className="jtm-more" ref={ref}>
-      <button type="button" className="jtm-btn jtm-btn--small" aria-expanded={openMenu} aria-haspopup="true" onClick={() => setOpenMenu((o) => !o)} data-testid="more">More ▾</button>
-      {openMenu && (
-        <ul className="jtm-more-menu" role="menu">
-          {items.map(([label, run]) => (
-            <li key={label}><button type="button" role="menuitem" onClick={() => { setOpenMenu(false); run(); }}>{label}</button></li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
+const ZOOM_NAMES = { ticket: 'Ticket', theme: 'Theme (epic)', team: 'Team' };
 
 export default function App({
   fixture,
@@ -302,28 +281,50 @@ export default function App({
           {tab === 'map' && (
             <div className="jtm-topbar-actions" role="toolbar" aria-label="Team map">
               <SearchBox compact model={model} inputRef={searchRef} id="jtm-top-search" onSearch={(v) => open({ kind: 'worked', result: whoHasWorkedOn(model, v, { absent }) })} />
-              <button type="button" className="jtm-btn jtm-btn--small" onClick={() => open({ kind: 'single' })} data-testid="open-single">One-person work <span className="jtm-count-pill">{single.count}</span></button>
-              <button type="button" className={`jtm-btn jtm-btn--small${simulating ? ' jtm-btn--on' : ''}`} aria-pressed={simulating} onClick={() => {
-                if (simulating) { setAbsent(new Set()); setSimulating(false); }
-                else { setSimulating(true); open({ kind: 'ranking' }); }
-              }}>{simulating ? 'Exit simulation' : 'Simulate absence'}</button>
+              <ToolButton icon="person" text="One-person" label="Work only one person has worked on" className="jtm-tbtn--collapse-sm" count={single.count} onClick={() => open({ kind: 'single' })} data-testid="open-single" />
+              <ToolButton
+                icon={simulating ? 'close' : 'personOut'}
+                text={simulating ? 'Exit' : 'Absence'}
+                label={simulating ? 'Exit absence simulation' : 'Simulate absence'}
+                on={simulating}
+                aria-pressed={simulating}
+                collapse={!simulating}
+                onClick={() => {
+                  if (simulating) { setAbsent(new Set()); setSimulating(false); }
+                  else { setSimulating(true); open({ kind: 'ranking' }); }
+                }}
+                data-testid="toggle-simulation"
+              />
+              <MenuButton
+                icon="layers"
+                text={<>Labels: {ZOOM_NAMES[zoom]} <Icon name="chevronDown" size={14} /></>}
+                label={`Arrow labels: ${ZOOM_NAMES[zoom]}`}
+                collapse
+                testid="labels-menu"
+                menuLabel="Arrow labels"
+                items={ZOOMS.map((z) => ({ label: ZOOM_NAMES[z], checked: zoom === z, run: () => setZoom(z), attrs: { 'data-zoom': z } }))}
+              />
               {setupChip && (
                 <span className="jtm-setup-chip" data-testid="setup-banner">
-                  <button type="button" className="jtm-btn jtm-btn--small jtm-btn--attn" onClick={() => open({ kind: 'setup' })} data-testid="open-setup" title={`${setup.todo} ${setup.todo === 1 ? 'thing' : 'things'} would make this map more useful`}>
-                    Set up <span className="jtm-count-pill jtm-count-pill--todo" aria-label={`${setup.todo} to do`}>{setup.todo}</span>
-                  </button>
-                  <button type="button" className="jtm-chip-x" onClick={dismissBanner} aria-label="Hide setup reminder (Set up stays under More)" title="Hide (Set up stays under More)">×</button>
+                  <ToolButton icon="sliders" text="Set up" className="jtm-tbtn--collapse-sm" label={`Set up: ${setup.todo} ${setup.todo === 1 ? 'thing' : 'things'} would make this map more useful`} count={setup.todo} countTodo attn onClick={() => open({ kind: 'setup' })} data-testid="open-setup" />
+                  <button type="button" className="jtm-chip-x" onClick={dismissBanner} aria-label="Hide setup reminder (Set up stays under More)" title="Hide (Set up stays under More)"><Icon name="close" size={14} /></button>
                 </span>
               )}
-              <MoreMenu
-                items={[
-                  ['People & coverage', () => open({ kind: 'ranking' })],
-                  ...(setupChip ? [] : [[`Set up${setup.todo ? ` (${setup.todo} to do)` : ''}`, () => open({ kind: 'setup' })]]),
-                  ['Edit teams', () => open({ kind: 'teams' })],
-                  ['Data & coverage', () => open({ kind: 'data' })],
-                  ['Map key', () => open({ kind: 'key' })],
-                ]}
-              />
+              <span className="jtm-tbar-end">
+                <ToolButton icon="chart" iconOnly label="People & coverage" onClick={() => open({ kind: 'ranking' })} data-testid="open-ranking" />
+                <ToolButton icon="people" iconOnly label="Edit teams" onClick={() => open({ kind: 'teams' })} data-testid="open-teams" />
+                <ToolButton icon="info" iconOnly label="Map key" onClick={() => open({ kind: 'key' })} data-testid="open-key" />
+                <MenuButton
+                  icon="more"
+                  iconOnly
+                  label="More"
+                  testid="more"
+                  items={[
+                    ...(setupChip ? [] : [{ label: `Set up${setup.todo ? ` (${setup.todo} to do)` : ''}`, run: () => open({ kind: 'setup' }) }]),
+                    { label: 'Data & coverage', run: () => open({ kind: 'data' }) },
+                  ]}
+                />
+              </span>
             </div>
           )}
           {tab === 'mywork' && <div className="jtm-topbar-actions" ref={setToolbarSlot} />}
@@ -364,24 +365,13 @@ export default function App({
             onSelect={selectPerson}
             onBadge={(_id, key) => open({ kind: 'worked', result: whoHasWorkedOn(model, key, { absent }) })}
             onBackground={view && !compact ? closeAll : undefined}
-            head={
-              <>
-                <ZoomControl zoom={zoom} onZoom={setZoom} />
-                <span className="jtm-mini-key">
-                  <span><i className="jtm-mk-arrow" aria-hidden="true" />waits on</span>
-                  <span><i className="jtm-mk-arrow jtm-mk-arrow--red" aria-hidden="true" />blocked or overdue</span>
-                  <span><i className="jtm-mk-badge" aria-hidden="true">1</i>one person has worked on it</span>
-                  <button type="button" className="jtm-link" onClick={() => open({ kind: 'key' })}>Map key</button>
-                </span>
-              </>
-            }
           />
           <Drawer open={!!view} compact={compact} title={title} onClose={closeAll} onBack={stack.length > 1 ? back : null}>
             {view?.kind === 'search' && <><p>Search for a ticket or area to find people who have worked on it.</p><SearchBox model={model} onSearch={search} /></>}
             {view?.kind === 'worked' && <WorkedOnPanel bare result={view.result} onOpen={openTickets} />}
             {view?.kind === 'tickets' && <TicketList bare model={model} title={view.title} keys={view.keys} />}
             {view?.kind === 'person' && sel && <PersonDetail bare model={model} onEditTeam={() => push({ kind: 'teams', focusId: selectedId })} r={sel} out={absent.has(selectedId)} knowledge={data.knowledge} near={workedNear(model, selectedId, { absent })} onToggleOut={() => toggleOut(selectedId)} onOpen={openTickets} onSearch={search} />}
-            {view?.kind === 'ranking' && <><p className="jtm-muted">{simulating ? 'Mark people out; the map updates beside this panel.' : 'Select a person to see their work and connections.'}</p><Ranking rows={rank.rows} absent={absent} selectedId={selectedId} onSelect={selectPerson} onToggleOut={toggleOut} onOpen={openTickets} /></>}
+            {view?.kind === 'ranking' && <>{!simulating && <p className="jtm-muted">Select a person to see their work and connections.</p>}<Ranking rows={rank.rows} avatarOf={model.avatarOf} absent={absent} selectedId={selectedId} onSelect={selectPerson} onToggleOut={toggleOut} onOpen={openTickets} /></>}
             {view?.kind === 'impact' && data.impact && <AbsencePanel bare model={model} impact={data.impact} onToggleOut={toggleOut} onClear={() => { setAbsent(new Set()); closeAll(); }} onOpen={openTickets} />}
             {view?.kind === 'impact' && !data.impact && <p className="jtm-muted">No one is marked out.</p>}
             {view?.kind === 'data' && <><p data-testid="provenance">Built from <Keys keys={prov.issues.keys} title={`${prov.issues.n} Jira issues`} onOpen={openTickets}>{prov.issues.n} Jira issues</Keys> · <Keys keys={prov.assignedPct.keys} title="Assigned open work" onOpen={openTickets}>{prov.assignedPct.n}% assigned</Keys> · <Keys keys={prov.dependencyLinks.keys} title="Tickets in open dependency links" onOpen={openTickets}>{prov.dependencyLinks.n} recorded dependency links</Keys>{prov.addedInApp.n > 0 && <> · <Keys keys={prov.addedInApp.keys} title="Builds-on relations added in My work" onOpen={openTickets}>{prov.addedInApp.n} added in My work</Keys></>}.</p><DataQuality model={model} onOpen={openTickets} /><p><button type="button" className="jtm-btn jtm-btn--small" onClick={() => push({ kind: 'teams' })}>Edit teams</button></p>{(dataNotes.length > 0 || linkCoverage) && <div className="jtm-sec" data-testid="data-notes"><h4>From this Jira site</h4><ul>{dataNotes.map((n) => <li key={n}>{n}</li>)}{linkCoverage && <li>Links drawn in My work: {Object.entries(linkCoverage).map(([t, name], i) => <span key={t}>{i > 0 && ' · '}{RELATION_TYPES[t].label} → {name ? `Jira link “${name}”` : 'saved in the app'}</span>)}</li>}</ul></div>}</>}

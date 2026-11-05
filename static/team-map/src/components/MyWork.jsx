@@ -7,9 +7,12 @@ import { DEFAULT_RELATION, RELATION_ORDER, RELATION_TYPES, givesContext } from '
 import { workedOn } from '../analysis/scoring.js';
 import { toMs } from '../analysis/dates.js';
 import { routeLines, LANE_GAP } from '../graph/boardRoute.js';
+import Avatar from './Avatar.jsx';
+import Icon from './Icons.jsx';
+import { InfoButton, ToolButton } from './Toolbar.jsx';
+import { Combobox, PersonPicker } from './Combobox.jsx';
 
 const DRAG_START_PX = 6;
-const initials = (name) => name.slice(0, 2);
 const owner = (model, issue) => (issue.ownerId ? model.nameOf(issue.ownerId) : 'unassigned');
 const statusClass = (i) => (i.done ? 'done' : i.statusCategory === 'indeterminate' ? 'progress' : 'todo');
 const effectText = (type) => (givesContext(type) ? 'gives context on the team map' : 'search only');
@@ -275,37 +278,36 @@ export default function MyWork({ model, personId, onPerson, onAddLink, onChangeL
       : view?.kind === 'link' ? 'Link'
         : '';
 
+  const lineKey = (
+    <div className="jtm-wl-legend jtm-wl-legend--stack" data-testid="line-key">
+      <span><svg width="30" height="8" aria-hidden="true"><path d="M1,4 H29" className="jtm-wl jtm-wl--context" /></svg> builds on, follows up on, replaces, fixes: context</span>
+      <span><svg width="30" height="8" aria-hidden="true"><path d="M1,4 H29" className="jtm-wl jtm-wl--related" /></svg> related to: search only</span>
+      <span className="jtm-muted">Drag from one card to another to link them.</span>
+    </div>
+  );
   const actions = (
     <div className="jtm-board-actions" role="toolbar" aria-label="My work">
-      <form
-        className="jtm-search jtm-search--compact"
-        onSubmit={(ev) => {
-          ev.preventDefault();
-          const key = addValue.trim().toUpperCase().split(/\s/)[0];
-          if (model.issueByKey.get(key) && !model.issueByKey.get(key).isEpic) {
-            setPinned((prev) => [...new Set([...prev, model.issueByKey.get(key).workKey])]);
-            setAddValue('');
-          }
+      <Combobox
+        id="jtm-add-card"
+        icon="plus"
+        label="Add a card (ticket key)"
+        placeholder="Add a card…"
+        title="Put any ticket on this board by its key, e.g. to link it"
+        testid="add-card"
+        value={addValue}
+        onChange={setAddValue}
+        clearOnSubmit
+        options={allKeys.map((i) => ({ value: i.key, title: i.summary, meta: owner(model, i) }))}
+        onSubmit={(v) => {
+          const key = v.trim().toUpperCase().split(/\s/)[0];
+          if (model.issueByKey.get(key) && !model.issueByKey.get(key).isEpic) setPinned((prev) => [...new Set([...prev, model.issueByKey.get(key).workKey])]);
         }}
-      >
-        <label htmlFor="jtm-add-card" className="jtm-sr-only">Add a card</label>
-        <input id="jtm-add-card" list="jtm-add-card-options" value={addValue} onChange={(ev) => setAddValue(ev.target.value)} placeholder="Add a card: ticket key…" title="Put any ticket on this board, e.g. to link it" data-testid="add-card" />
-        <datalist id="jtm-add-card-options">
-          {allKeys.map((i) => (
-            <option key={i.key} value={i.key}>{i.summary} · {owner(model, i)}</option>
-          ))}
-        </datalist>
-        <button type="submit" className="jtm-btn jtm-btn--small">Add</button>
-      </form>
-      <label className="jtm-inline-field">
-        <span className="jtm-sr-only">Person</span>
-        <select value={personId} onChange={(ev) => onPerson(ev.target.value)} data-testid="viewing-as">
-          {model.people.filter((p) => !p.reporterOnly).map((p) => (
-            <option key={p.accountId} value={p.accountId}>{p.name}{p.team ? ` · ${p.team}` : ''}</option>
-          ))}
-        </select>
-      </label>
-      <button type="button" className="jtm-btn jtm-btn--small" onClick={() => onShowOnMap(personId)}>Show on team map</button>
+      />
+      <PersonPicker people={model.people.filter((p) => !p.reporterOnly)} value={personId} onChange={onPerson} testid="viewing-as" />
+      <ToolButton icon="map" text="Map" label="Show on team map" collapse onClick={() => onShowOnMap(personId)} data-testid="show-on-map" />
+      <span className="jtm-tbar-end">
+        <InfoButton label="Line key" testid="open-line-key">{lineKey}</InfoButton>
+      </span>
     </div>
   );
 
@@ -314,7 +316,7 @@ export default function MyWork({ model, personId, onPerson, onAddLink, onChangeL
       {toolbarSlot && createPortal(actions, toolbarSlot)}
       <header className="jtm-board-header">
         <div className="jtm-person-head">
-          <span className="jtm-avatar" aria-hidden="true">{initials(me.name)}</span>
+          <Avatar name={me.name} url={me.avatarUrl} />
           <h2>{me.name}</h2>
           <p>{me.team ?? 'No team'} · {ownOpen} open · {ownDone} done in the last 12 months · {board.lines.length} {board.lines.length === 1 ? 'link' : 'links'}</p>
         </div>
@@ -325,14 +327,6 @@ export default function MyWork({ model, personId, onPerson, onAddLink, onChangeL
 
       <div className={`jtm-stage${view && !compact ? ' jtm-stage--drawer' : ''}`}>
         <div className="jtm-board-scroll">
-        <div className="jtm-frame-head">
-          <div className="jtm-wl-legend" aria-label="Line key">
-            <span><svg width="30" height="8" aria-hidden="true"><path d="M1,4 H29" className="jtm-wl jtm-wl--context" /></svg> builds on, follows up on, replaces, fixes: context</span>
-            <span><svg width="30" height="8" aria-hidden="true"><path d="M1,4 H29" className="jtm-wl jtm-wl--related" /></svg> related to: search only</span>
-          </div>
-          <span className="jtm-muted">Drag from one card to another to link them</span>
-        </div>
-
           <div
             className={`jtm-board-inner${drag ? ' jtm-board-inner--drawing' : ''}`}
             ref={innerRef}
@@ -372,7 +366,7 @@ export default function MyWork({ model, personId, onPerson, onAddLink, onChangeL
                       <div className="jtm-card-top">
                         <code>{c.key}</code>
                         {c.kind !== 'own' && (
-                          <span className="jtm-mini-avatar" title={owner(model, c.issue)} aria-hidden="true">{c.issue.ownerId ? initials(model.nameOf(c.issue.ownerId)) : '?'}</span>
+                          <Avatar className="jtm-mini-avatar" title={owner(model, c.issue)} name={c.issue.ownerId ? model.nameOf(c.issue.ownerId) : '?'} url={c.issue.ownerId ? model.avatarOf(c.issue.ownerId) : null} />
                         )}
                       </div>
                       <div className="jtm-card-title">{c.issue.summary}</div>
@@ -395,17 +389,30 @@ export default function MyWork({ model, personId, onPerson, onAddLink, onChangeL
                   </marker>
                 ))}
               </defs>
+              {/* 1. all lines first… */}
               {board.lines.map((l) => {
                 const route = routes.get(l.id);
                 if (!route) return null;
                 const kind = givesContext(l.type) ? 'context' : 'related';
-                const { d, mid } = route;
+                return (
+                  <g key={l.id} data-line={l.id} className={`jtm-wl-g${view?.kind === 'link' && view.link.id === l.id ? ' jtm-wl-g--on' : ''}`}>
+                    <path d={route.d} className="jtm-wl-hit" />
+                    <path d={route.d} className={`jtm-wl jtm-wl--${kind}`} markerEnd={`url(#jtm-wl-arrow-${kind})`} />
+                  </g>
+                );
+              })}
+              {/* 2. …then every relation label, so no line is ever drawn over a label */}
+              {board.lines.map((l) => {
+                const route = routes.get(l.id);
+                if (!route) return null;
+                const kind = givesContext(l.type) ? 'context' : 'related';
+                const { mid } = route;
                 const label = RELATION_TYPES[l.type].label;
                 const w = label.length * 6.2 + 14;
                 return (
                   <g
                     key={l.id}
-                    data-line={l.id}
+                    data-line-label={l.id}
                     className={`jtm-wl-g${view?.kind === 'link' && view.link.id === l.id ? ' jtm-wl-g--on' : ''}`}
                     role="button"
                     tabIndex={0}
@@ -413,8 +420,6 @@ export default function MyWork({ model, personId, onPerson, onAddLink, onChangeL
                     onClick={() => setView({ kind: 'link', link: l })}
                     onKeyDown={(ev) => (ev.key === 'Enter' || ev.key === ' ') && (ev.preventDefault(), setView({ kind: 'link', link: l }))}
                   >
-                    <path d={d} className="jtm-wl-hit" />
-                    <path d={d} className={`jtm-wl jtm-wl--${kind}`} markerEnd={`url(#jtm-wl-arrow-${kind})`} />
                     <rect x={mid.x - w / 2} y={mid.y - 9} width={w} height={18} rx={9} className={`jtm-wl-pill jtm-wl-pill--${kind}`} />
                     <text x={mid.x} y={mid.y + 4} textAnchor="middle" className="jtm-wl-text">{label}</text>
                   </g>

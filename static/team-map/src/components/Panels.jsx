@@ -4,6 +4,9 @@ import { areas, evidenceText } from '../analysis/search.js';
 import { ZOOMS } from '../analysis/labels.js';
 import { linksOf } from '../analysis/relations.js';
 import { RELATION_TYPES } from '../analysis/relationTypes.js';
+import Avatar from './Avatar.jsx';
+import Icon from './Icons.jsx';
+import { Combobox } from './Combobox.jsx';
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -65,6 +68,29 @@ export function SearchBox({ model, onSearch, defaultValue = '', compact = false,
     ...a.components.map((c) => ({ v: `component:${c}`, l: 'component' })),
     ...a.labels.map((l) => ({ v: `label:${l}`, l: 'label' })),
   ];
+  if (compact) {
+    const tags = { epic: 'Epic', component: 'Component', label: 'Label' };
+    return (
+      <Combobox
+        id={id}
+        icon="search"
+        label="Who has worked on this?"
+        placeholder="Who has worked on…"
+        title="Ticket key (DES-2), epic:KEY, component:name or label:name"
+        inputRef={inputRef}
+        testid="search-input"
+        value={value}
+        onChange={setValue}
+        onSubmit={onSearch}
+        options={options
+          .filter((o) => o.v !== 'label:jtm-seed')
+          .map((o) => {
+            const kind = o.v.includes(':') ? o.v.split(':')[0] : null;
+            return { value: o.v, title: kind === 'component' || kind === 'label' ? null : o.l, tag: tags[kind] };
+          })}
+      />
+    );
+  }
   return (
     <form
       className={`jtm-search${compact ? ' jtm-search--compact' : ''}`}
@@ -75,11 +101,12 @@ export function SearchBox({ model, onSearch, defaultValue = '', compact = false,
       }}
     >
       <label htmlFor={id} className={compact ? 'jtm-sr-only' : undefined}>Who has worked on this?</label>
+      {compact && <Icon name="search" className="jtm-search-icon" />}
       <input
         id={id}
         ref={inputRef}
         list={`${id}-options`}
-        placeholder={compact ? 'Who has worked on…?' : 'Ticket key, epic:, component: or label:'}
+        placeholder={compact ? 'Who has worked on…' : 'Ticket key, epic:, component: or label:'}
         title="Ticket key (DES-2), epic:KEY, component:name or label:name"
         value={value}
         onChange={(ev) => setValue(ev.target.value)}
@@ -90,7 +117,7 @@ export function SearchBox({ model, onSearch, defaultValue = '', compact = false,
           <option key={o.v} value={o.v}>{o.l}</option>
         ))}
       </datalist>
-      <button type="submit" className={`jtm-btn${compact ? ' jtm-btn--small' : ''}`}>{compact ? 'Find' : 'Search'}</button>
+      {!compact && <button type="submit" className="jtm-btn">Search</button>}
     </form>
   );
 }
@@ -129,10 +156,12 @@ export function WorkedOnPanel({ result, onClose, onOpen, bare }) {
 }
 
 // ------------------------------------------------------------------ ranking
+/** "How coverage risk is counted": collapsed by default. */
 export function FormulaLine() {
   const short = { cold: 'cold task', warm: 'warm task', blockedOrOverdue: 'task Blocked, flagged or overdue', waiting: 'each person left waiting', soleTeamLink: 'sole team link', leadChange: 'lead change' };
   return (
-    <div className="jtm-formula" data-testid="formula">
+    <details className="jtm-formula" data-testid="formula">
+      <summary>How coverage risk is counted</summary>
       <p>
         <strong>Coverage risk</strong> = what is left uncovered if this person is also out:{' '}
         {FORMULA.map((f, i) => (
@@ -142,66 +171,80 @@ export function FormulaLine() {
           </span>
         ))}
       </p>
-      <details>
-        <summary>How each part is counted</summary>
-        <ul>
-          {FORMULA.map((f) => (
-            <li key={f.kind}>+{f.points} {f.unit}: {f.text}</li>
-          ))}
-          {FORMULA_NOTES.map((n) => (
-            <li key={n}>{n}</li>
-          ))}
-        </ul>
-      </details>
-    </div>
+      <ul>
+        {FORMULA.map((f) => (
+          <li key={f.kind}>+{f.points} {f.unit}: {f.text}</li>
+        ))}
+        {FORMULA_NOTES.map((n) => (
+          <li key={n}>{n}</li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
-export function Ranking({ rows, absent, selectedId, onSelect, onToggleOut, onOpen }) {
+/** One person: avatar, name, team, score, mark out; "How N is counted" opens their parts. */
+function RankingRow({ r, absent, selected, onSelect, onToggleOut, onOpen, avatarUrl }) {
+  const [open, setOpen] = useState(false);
+  const allKeys = [...new Set(r.components.flatMap((c) => c.keys))];
+  const partsId = `jtm-parts-${r.personId}`;
+  return (
+    <li data-person={r.personId} className={`${r.out ? 'jtm-row--out' : ''}${selected ? ' jtm-row--selected' : ''}`}>
+      <div className="jtm-row-head">
+        <Avatar name={r.name} url={avatarUrl} className="jtm-avatar jtm-avatar--row" />
+        <span className="jtm-row-who">
+          <button type="button" className="jtm-name" onClick={() => onSelect(r.personId)} aria-pressed={selected}>
+            {r.name}
+          </button>
+          <span className="jtm-team">{r.team ?? 'No team'}{r.out && <span className="jtm-pill jtm-pill--out">marked out</span>}</span>
+        </span>
+        <Keys keys={allKeys} title={`${r.name}: tickets behind coverage risk ${r.score}`} onOpen={onOpen} className="jtm-num jtm-score">
+          {r.score}
+        </Keys>
+        {absent.size > 0 && !r.out && r.delta !== 0 && (
+          <span className="jtm-delta" data-testid="delta" aria-label={`${r.delta > 0 ? 'up' : 'down'} ${Math.abs(r.delta)} since people were marked out`}>
+            {r.delta > 0 ? `▲ +${r.delta}` : `▼ ${r.delta}`}
+          </span>
+        )}
+        <button type="button" className="jtm-btn jtm-btn--small jtm-absence-control" onClick={() => onToggleOut(r.personId)} aria-pressed={r.out}>
+          <Icon name={r.out ? 'personIn' : 'personOut'} size={14} />
+          {r.out ? 'Mark back in' : 'Mark out'}
+        </button>
+      </div>
+      {r.components.length > 0 && (
+        <>
+          <button type="button" className="jtm-disclose" aria-expanded={open} aria-controls={partsId} onClick={() => setOpen((o) => !o)} data-testid="row-parts-toggle">
+            <span aria-hidden="true">{open ? '▾' : '▸'}</span> How {r.score} is counted
+          </button>
+          {open && (
+            <ul className="jtm-reasons" id={partsId}>
+              {r.components.map((c, i) => (
+                <li key={i}>
+                  <Keys keys={c.keys} title={`${r.name}: ${c.text}`} onOpen={onOpen} className="jtm-reason">
+                    {c.text} <b>+{c.points}</b>
+                  </Keys>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </li>
+  );
+}
+
+export function Ranking({ rows, absent, selectedId, onSelect, onToggleOut, onOpen, avatarOf = () => null }) {
   return (
     <section className="jtm-ranking" aria-label="Coverage risk ranking" data-testid="ranking">
-      <h2>Coverage risk</h2>
+      <h2 className="jtm-sr-only">Coverage risk</h2>
       <FormulaLine />
       {rows.length === 0 ? (
         <p>No one has a coverage risk above 0.</p>
       ) : (
         <ol className="jtm-rows">
-          {rows.map((r) => {
-            const allKeys = [...new Set(r.components.flatMap((c) => c.keys))];
-            return (
-              <li key={r.personId} data-person={r.personId} className={`${r.out ? 'jtm-row--out' : ''}${selectedId === r.personId ? ' jtm-row--selected' : ''}`}>
-                <div className="jtm-row-head">
-                  <button type="button" className="jtm-name" onClick={() => onSelect(r.personId)} aria-pressed={selectedId === r.personId}>
-                    {r.name}
-                  </button>
-                  <span className="jtm-team">{r.team}</span>
-                  <Keys keys={allKeys} title={`${r.name}: tickets behind coverage risk ${r.score}`} onOpen={onOpen} className="jtm-num jtm-score">
-                    {r.score}
-                  </Keys>
-                  {absent.size > 0 && !r.out && r.delta !== 0 && (
-                    <span className="jtm-delta" data-testid="delta" aria-label={`${r.delta > 0 ? 'up' : 'down'} ${Math.abs(r.delta)} since people were marked out`}>
-                      {r.delta > 0 ? `▲ +${r.delta}` : `▼ ${r.delta}`}
-                    </span>
-                  )}
-                  {r.out && <span className="jtm-pill jtm-pill--out">marked out</span>}
-                  <button type="button" className="jtm-btn jtm-btn--small jtm-absence-control" onClick={() => onToggleOut(r.personId)} aria-pressed={r.out}>
-                    {r.out ? 'Mark back in' : 'Mark out'}
-                  </button>
-                </div>
-                {r.components.length > 0 && (
-                  <ul className="jtm-reasons">
-                    {r.components.map((c, i) => (
-                      <li key={i}>
-                        <Keys keys={c.keys} title={`${r.name}: ${c.text}`} onOpen={onOpen} className="jtm-reason">
-                          {c.text} <b>+{c.points}</b>
-                        </Keys>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li>
-            );
-          })}
+          {rows.map((r) => (
+            <RankingRow key={r.personId} r={r} avatarUrl={avatarOf(r.personId)} absent={absent} selected={selectedId === r.personId} onSelect={onSelect} onToggleOut={onToggleOut} onOpen={onOpen} />
+          ))}
         </ol>
       )}
     </section>
